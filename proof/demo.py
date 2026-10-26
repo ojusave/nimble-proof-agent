@@ -27,14 +27,14 @@ class DemoModel:
             calls = [('read_source', {'source_id': 'S1'}), ('read_source', {'source_id': 'S2'})]
         else:
             calls = [('finish_brief', {
-                'title': 'Two platforms. Four claims. Every claim has a receipt.',
+                'title': 'Atlas vs Beacon',
                 'summary': 'In this synthetic scenario, Atlas exports daily and offers private networking on Enterprise; Beacon exports weekly and does not offer private networking.',
                 'findings': [
                     {'claim': 'Atlas supports daily CSV exports.', 'source_id': 'S1', 'quote': 'Scheduled CSV exports run every day.'},
                     {'claim': 'Atlas limits private networking to Enterprise.', 'source_id': 'S1', 'quote': 'Private networking is available on the Enterprise plan.'},
                     {'claim': 'Beacon supports weekly CSV exports.', 'source_id': 'S2', 'quote': 'Scheduled CSV exports run every week.'},
                     {'claim': 'Beacon does not currently offer private networking.', 'source_id': 'S2', 'quote': 'Private networking is not currently available.'}],
-                'gaps': ['All companies and source text in this demo are fictional. No live Nimble or Anthropic requests were made.',
-                         'The scripted model demonstrates orchestration and validation; it does not test autonomous model reasoning.']})]
+                'gaps': ['Fictional demo data; no live API calls.',
+                         'Scripted demo; live model reasoning has not been tested.']})]
         return [{'type': 'tool_use', 'id': 'demo_%s_%s' % (self.turn, index), 'name': name, 'input': args}
                 for index, (name, args) in enumerate(calls)]

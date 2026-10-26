@@ -1,4 +1,4 @@
-# Two platforms. Four claims. Every claim has a receipt.
+# Atlas vs Beacon
 
 > Mode: synthetic offline demo
 
@@ -24,7 +24,7 @@ In this synthetic scenario, Atlas exports daily and offers private networking on
 
 ## Gaps and limitations
 
-- All companies and source text in this demo are fictional. No live Nimble or Anthropic requests were made.
-- The scripted model demonstrates orchestration and validation; it does not test autonomous model reasoning.
+- Fictional demo data; no live API calls.
+- Scripted demo; live model reasoning has not been tested.
 
 Quote matching verifies provenance, not whether a source is true or a claim follows from it.

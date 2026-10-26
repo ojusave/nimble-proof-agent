@@ -35,12 +35,12 @@ function render(run) {
   $('run-view').hidden = false;
   $('run-state').textContent = run.status;
   $('mode-note').textContent = run.mode === 'demo'
-    ? 'SYNTHETIC DEMO — Fictional companies, scripted model, no live API calls.'
-    : 'LIVE RESEARCH — Nimble supplies the evidence. Quote matching checks provenance, not truth.';
+    ? 'Demo · Fictional data. No API calls.'
+    : 'Live · Check the quoted sources before relying on a finding.';
   $('trace').replaceChildren(...run.events.map(event => {
     const detail = event.detail;
-    const title = {start:'Investigation started',search:'Searched the live web',read:'Read source ' + detail.source_id,finish:'Evidence checks passed',tool_error:'Tool returned an error'}[event.type] || event.type;
-    const item = node('li', run.mode === 'demo' && event.type === 'search' ? 'Searched synthetic fixtures' : title);
+    const title = {start:'Started',search:'Searched the live web',read:'Read source ' + detail.source_id,finish:'Quotes checked',tool_error:'Tool returned an error'}[event.type] || event.type;
+    const item = node('li', run.mode === 'demo' && event.type === 'search' ? 'Searched demo data' : title);
     item.append(node('small', detail.query || detail.url || detail.error || (event.type === 'finish' ? detail.findings + ' findings with matching quotations' : detail.question || '')));
     return item;
   }));
@@ -68,8 +68,8 @@ function render(run) {
 }
 async function watch(id) {
   active = id; const mine = ++generation;
-  $('message').textContent = ''; $('run-title').textContent = 'Following the evidence';
-  $('brief').replaceChildren(node('p', 'Waiting for the evidence-backed brief…', 'muted'));
+  $('message').textContent = ''; $('run-title').textContent = 'Research';
+  $('brief').replaceChildren(node('p', 'Reading sources…', 'muted'));
   $('sources').replaceChildren(); $('download').hidden = true; busy(true);
   try {
     while (mine === generation) {
