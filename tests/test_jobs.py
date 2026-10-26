@@ -11,7 +11,7 @@ from adapters.resume.parser import parse_resume,professional_text
 from adapters.storage.sqlite import Repository
 from core.settings import Settings
 from core.models import SearchRequest
-from workflows.job_matcher import JobWorkflow
+from workflows.job_matcher import JobWorkflow,contains
 from runners.langgraph import LangGraphRunner
 from api.app import create_app
 
@@ -23,6 +23,10 @@ class WorkflowTests(unittest.TestCase):
         result=LangGraphRunner().run(workflow,{'resume_text':SAMPLE_RESUME,'query':'Developer advocate, remote, US',
                'count':count,'max_rounds':rounds,'demo':True})
         return result,events
+
+    def test_evidence_accepts_typographic_quotes_but_not_changed_words(self):
+        self.assertTrue(contains("We're hiring Python developers",'We’re hiring Python developers.'))
+        self.assertFalse(contains("We're hiring Java developers",'We’re hiring Python developers.'))
 
     def test_graph_strict_filters_and_shortfall(self):
         result,events=self.run_workflow()

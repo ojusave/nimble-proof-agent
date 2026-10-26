@@ -20,3 +20,7 @@ Use real employer listings for the conference demo. Record a successful live run
 - 16–20: Explain Nimble's three roles, the open-source components, tradeoffs, and how to replace a provider.
 
 Do not present quote matching as proof that a vacancy is open or a recommendation is correct. Do not claim superiority over other search providers without a measured comparison.
+
+## Live verification
+
+Search and Extract found a real SerpApi Python Developer Advocate listing. A Nimble Agent research run returned a structured assessment. Local validation found shared Python evidence, but marked the listing for review because requirement/application quotations could not be verified verbatim. This is a provider integration check, not a guarantee of current vacancy availability.

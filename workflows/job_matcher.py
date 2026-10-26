@@ -11,7 +11,7 @@ from .schemas import PLAN,assessment_schema
 
 
 def contains(quote,text):
-    norm=lambda s: re.sub(r'\s+',' ',s).strip().casefold()
+    norm=lambda s: re.sub(r'\s+',' ',s.translate(str.maketrans({'’':"'",'‘':"'",'“':'\"','”':'\"'}))).strip().casefold()
     return isinstance(quote,str) and len(quote.strip())>=8 and norm(quote) in norm(text)
 
 
@@ -119,7 +119,7 @@ class JobWorkflow:
               'Return one check per requirement ID: met, conflict, or unknown, with exact job text as evidence. '
               'Absence of a restriction is UNKNOWN, not met. Remote does not mean worldwide. Salary comparisons must use the stated currency, period, and range. '
               'Judge fit ONLY from professional experience/skills. Do not infer or use protected/sensitive traits. '
-              'Strengths require exact resume_quote and exact job_quote. Missing skills belong in gaps. '
+              'Copy short unaltered quotations of 8–20 words; preserve punctuation and never rewrite or add ellipses. Strengths require exact resume_quote and exact job_quote. Missing skills belong in gaps. '
               'Use strong/possible/weak relevance; do not invent a numerical probability.\n'+json.dumps({
               'resume':state['profile'][:4500],'preferences':state['query'],'requirements':state['plan']['requirements'],
               'candidates':[{'candidate_id':r['id'],'url':r['url'],'text':r['text'][:per_page]} for r in readable]}))
