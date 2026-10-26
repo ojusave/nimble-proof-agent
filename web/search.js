@@ -187,7 +187,7 @@ function renderJobs() {
   }
   $('job-list').setAttribute('aria-labelledby', review ? 'review-tab' : 'matches-tab');
   $('job-list').replaceChildren(...jobs.map(job => jobCard(job, review)));
-  if (!jobs.length) $('job-list').append(el('div', review ? 'No openings need review.' : running ? 'Checked matches will appear here.' : 'No openings met all requirements.', 'waiting-card'));
+  if (!jobs.length) $('job-list').append(el('div', review ? 'No openings need review.' : running ? 'Checked matches will appear here.' : finalResult ? 'No openings met all requirements.' : 'No shortlist was produced.', 'waiting-card'));
   progress();
 }
 function selectTab(value, focus = false) {

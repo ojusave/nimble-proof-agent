@@ -84,6 +84,15 @@ const checks = [
     assert.equal(state.stages.at(-1).calls.get('https://a.example/job').status, 'stopped');
     assert.equal(state.stages.some(stage => stage.kind === 'shortlist'), false);
   }],
+  ['provider failure preserves the exact error inside the stopped call', () => {
+    const state = createActivityState();
+    emit(state, 'step_started', 'plan', {round: 1});
+    emit(state, 'run_failed', 'finish', {}, 'Nimble returned HTTP 402.');
+    const stage = state.stages.at(-1);
+    assert.equal(stage.status, 'stopped');
+    assert.equal(stage.calls.get('plan').output.error, 'Nimble returned HTTP 402.');
+    assert.equal(describeStage(stage), 'Couldn’t finish this step');
+  }],
   ['late progress cannot restart a completed timeline', () => {
     const state = seeded();
     emit(state, 'search_completed', 'finish', {result: {jobs: [], requested: 5}});

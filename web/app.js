@@ -46,7 +46,9 @@ function applyActivityEvent(state, event) {
     state.terminal = 'failed';
     const stage = state.stages.at(-1) || stageFor(state, 'shortlist', round);
     stage.status = 'stopped'; stage.error = event.message;
-    for (const call of stage.calls.values()) if (call.status === 'active') call.status = 'stopped';
+    for (const call of stage.calls.values()) if (call.status === 'active') {
+      call.status = 'stopped'; call.output.error = event.message; remember(call, event);
+    }
     return;
   }
   if (event.step === 'resume') {
@@ -135,7 +137,7 @@ function finishActivity(state, status, result) {
 function describeStage(stage) {
   const errors = [...stage.calls.values()].filter(call => call.status === 'error').length;
   const issue = errors ? ' · ' + errors + (errors === 1 ? ' issue' : ' issues') : '';
-  if (stage.error) return stage.error;
+  if (stage.error) return 'Couldn’t finish this step';
   if (stage.kind === 'resume') return stage.status === 'active' ? 'Reading your experience' : 'Ready for matching';
   if (stage.kind === 'search') {
     const searches = [...stage.calls.values()].filter(call => call.key !== 'plan');
@@ -434,7 +436,7 @@ function renderJobs() {
   }
   $('job-list').setAttribute('aria-labelledby', review ? 'review-tab' : 'matches-tab');
   $('job-list').replaceChildren(...jobs.map(job => jobCard(job, review)));
-  if (!jobs.length) $('job-list').append(el('div', review ? 'No openings need review.' : running ? 'Checked matches will appear here.' : 'No openings met all requirements.', 'waiting-card'));
+  if (!jobs.length) $('job-list').append(el('div', review ? 'No openings need review.' : running ? 'Checked matches will appear here.' : finalResult ? 'No openings met all requirements.' : 'No shortlist was produced.', 'waiting-card'));
   progress();
 }
 function selectTab(value, focus = false) {
