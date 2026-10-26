@@ -36,10 +36,10 @@ function render(run) {
   $('run-state').textContent = run.status;
   $('mode-note').textContent = run.mode === 'demo'
     ? 'Demo · Fictional data. No API calls.'
-    : 'Live · Check the quoted sources before relying on a finding.';
+    : 'Live · Nimble Agent API. Quotes checked against retrieved pages.';
   $('trace').replaceChildren(...run.events.map(event => {
     const detail = event.detail;
-    const title = {start:'Started',search:'Searched the live web',read:'Read source ' + detail.source_id,finish:'Quotes checked',tool_error:'Tool returned an error'}[event.type] || event.type;
+    const title = {start:'Started',search:'Searched the live web',read:'Read source ' + detail.source_id,finish:'Quotes checked',tool_error:'Tool returned an error',remote_run:'Nimble run created',remote_status:'Nimble: ' + detail.status}[event.type] || event.type;
     const item = node('li', run.mode === 'demo' && event.type === 'search' ? 'Searched demo data' : title);
     item.append(node('small', detail.query || detail.url || detail.error || (event.type === 'finish' ? detail.findings + ' findings with matching quotations' : detail.question || '')));
     return item;

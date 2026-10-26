@@ -7,7 +7,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from .agent import Agent, markdown
 from .demo import DemoWeb, DemoModel, QUESTION
-from .providers import Nimble, Claude, ProviderError
+from .providers import Nimble, ProviderError
+from .hosted import NimbleAgent
 from .storage import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,7 +21,7 @@ def load_env():
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:
                 key, value = line.split('=', 1)
-                if key.strip() in ('NIMBLE_API_KEY', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL'):
+                if key.strip() in ('NIMBLE_API_KEY',):
                     os.environ.setdefault(key.strip(), value.strip().strip('\"\''))
 
 
@@ -30,8 +31,9 @@ def make_server(port=8765, db_path=None):
 
     def execute(rid, question, mode):
         try:
-            web, model = (DemoWeb(), DemoModel()) if mode == 'demo' else (Nimble(), Claude())
-            result = Agent(web, model, lambda event: store.event(rid, event)).run(question)
+            emit = lambda event: store.event(rid, event)
+            agent = Agent(DemoWeb(), DemoModel(), emit) if mode == 'demo' else NimbleAgent(emit)
+            result = agent.run(question)
             result['mode'] = 'synthetic offline demo' if mode == 'demo' else 'live'
             store.finish(rid, result=result)
         except (ValueError, ProviderError) as error:
@@ -74,7 +76,7 @@ def make_server(port=8765, db_path=None):
                 return self.send(403, {'error': 'Local origin required.'})
             path = urlsplit(self.path).path
             if path == '/api/config':
-                return self.send(200, {'live_ready': bool(os.environ.get('NIMBLE_API_KEY') and os.environ.get('ANTHROPIC_API_KEY'))})
+                return self.send(200, {'live_ready': bool(os.environ.get('NIMBLE_API_KEY'))})
             if path == '/api/runs':
                 return self.send(200, store.recent())
             if path.startswith('/api/runs/'):
@@ -114,7 +116,7 @@ def make_server(port=8765, db_path=None):
                 if not isinstance(question, str) or not 5 <= len(question.strip()) <= 1000:
                     raise ValueError('Question must contain 5–1000 characters.')
                 if mode == 'live':
-                    Nimble(), Claude()  # Fail early before creating a job.
+                    Nimble()  # Fail early before creating a job.
             except (ValueError, ProviderError) as error:
                 return self.send(400, {'error': str(error)})
             if not slot.acquire(blocking=False):

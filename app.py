@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 from proof.agent import Agent, markdown
 from proof.demo import DemoWeb, DemoModel, QUESTION
-from proof.providers import Nimble, Claude, ProviderError
+from proof.providers import ProviderError
+from proof.hosted import NimbleAgent
 from proof.server import load_env, serve
 
 
@@ -26,8 +27,8 @@ def main():
     if not args.demo and not args.question:
         parser.error('Provide a question or use --demo.')
     try:
-        web, model = (DemoWeb(), DemoModel()) if args.demo else (Nimble(), Claude())
-        result = Agent(web, model).run(QUESTION if args.demo else args.question)
+        agent = Agent(DemoWeb(), DemoModel()) if args.demo else NimbleAgent()
+        result = agent.run(QUESTION if args.demo else args.question)
         result['mode'] = 'synthetic offline demo' if args.demo else 'live'
         report = markdown(result)
         if args.output:

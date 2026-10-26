@@ -15,10 +15,10 @@ class NoRedirect(HTTPRedirectHandler):
         return None  # Never forward authorization headers to another host.
 
 
-def post_json(url, payload, headers):
-    request = Request(url, json.dumps(payload).encode(), {
-        'Content-Type': 'application/json', **headers}, method='POST')
-    for attempt in range(3):
+def request_json(url, headers, payload=None, method='GET', retries=2):
+    request = Request(url, json.dumps(payload).encode() if payload is not None else None, {
+        'Content-Type': 'application/json', **headers}, method=method)
+    for attempt in range(retries + 1):
         try:
             with build_opener(NoRedirect()).open(request, timeout=90) as response:
                 raw = response.read(4_000_001)
@@ -29,12 +29,20 @@ def post_json(url, payload, headers):
                 raise ProviderError('Provider returned an unexpected JSON shape.')
             return result
         except HTTPError as error:
-            if error.code in (429, 500, 502, 503, 504) and attempt < 2:
+            if error.code in (429, 500, 502, 503, 504) and attempt < retries:
                 time.sleep(2 ** attempt)
                 continue
-            raise ProviderError('Provider HTTP %s; check credentials, quota, and model access.' % error.code) from None
+            raise ProviderError('Provider HTTP %s; check credentials, quota, and API access.' % error.code) from None
         except (URLError, TimeoutError, OSError, ValueError):
             raise ProviderError('Provider connection or JSON response failed.') from None
+
+
+def post_json(url, payload, headers, retries=2):
+    return request_json(url, headers, payload, 'POST', retries)
+
+
+def get_json(url, headers):
+    return request_json(url, headers)
 
 
 class Nimble:
@@ -62,24 +70,3 @@ class Nimble:
         if not isinstance(content, str) or not content.strip():
             raise ProviderError('Nimble returned no readable Markdown for this source.')
         return content[:20000]
-
-
-class Claude:
-    def __init__(self):
-        self.key = os.environ.get('ANTHROPIC_API_KEY', '')
-        self.model = os.environ.get('ANTHROPIC_MODEL', 'claude-sonnet-4-6')
-        if not self.key:
-            raise ProviderError('Set ANTHROPIC_API_KEY in .env before starting a live run.')
-
-    def next(self, messages, tools, system, first):
-        payload = {'model': self.model, 'max_tokens': 3000, 'system': system,
-                   'messages': messages, 'tools': tools,
-                   'tool_choice': {'type': 'tool', 'name': 'search_web'} if first else {'type': 'any'}}
-        result = post_json('https://api.anthropic.com/v1/messages', payload,
-                          {'x-api-key': self.key, 'anthropic-version': '2023-06-01'})
-        if result.get('stop_reason') == 'max_tokens':
-            raise ProviderError('Model output was truncated. Narrow the research question.')
-        blocks = result.get('content')
-        if not isinstance(blocks, list):
-            raise ProviderError('Model response has no content blocks.')
-        return blocks

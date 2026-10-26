@@ -1,31 +1,25 @@
-# Demo walkthrough
+# Demo
 
-## Before presenting
+1. Set `NIMBLE_API_KEY` in `.env` and start `python3 app.py serve`.
+2. Ask a narrow comparison question using first-party documentation.
+3. Show the remote run status, then the local source reads and quote checks.
+4. Open a cited page and compare its text with the finding.
+5. Export the brief. Explain any gaps.
 
-1. Add real API keys to the local `.env`, restart the server, and run a narrow live question.
-2. Verify the resulting findings against their quoted sources. Check Nimble quota and Anthropic model access.
-3. Save the Markdown output. Record a successful live run as a network-failure backup; a synthetic demo is not a recording of live research.
-4. Keep keys, account screens, and `.env` out of screen recordings.
+Record a successful live run as a backup. The offline demo uses fictional data; do not present it as a live result.
 
-## A 20-minute talk
+## Talk outline — 20 minutes
 
-**0–3 minutes — The problem.** Put a polished answer next to a primary source that contradicts it. Ask: “What would you need to inspect before trusting this?” Explain why current platform features and plan restrictions require live documentation.
+- **0–3:** Why a source link alone is not enough to trust an answer.
+- **3–6:** Nimble researches; the app checks quoted evidence.
+- **6–12:** Run the demo and inspect a source.
+- **12–16:** Show a rejected quote and explain the limits of text matching.
+- **16–20:** Walk through the code, tradeoffs, and next steps.
 
-**3–6 — The architecture.** Show the README diagram. Explain the separation between deciding what to investigate, retrieving web evidence, and checking whether a quotation was actually retrieved.
+## Q&A
 
-**6–12 — Live run.** Compare two developer platforms on one concrete capability. Start research, narrate the search/read trail, inspect a finding, open its source, and export the brief. Call out one unresolved question. Use real API output; do not pass off synthetic fixtures as a live run.
-
-**12–16 — The failure case.** Show `test_rejects_fabricated_quotes` and `test_recovers_after_bad_quote`. Explain why a readable page or an HTTP 200 is not the same as a supported answer. Distinguish a matching quote from proof that a claim is true.
-
-**16–18 — Nimble’s role.** Show discovery with Search and page reading with Extract. Discuss what you would measure to compare providers: successful extractions, answerable questions, latency, and cost. Do not claim benchmark results that have not been measured.
-
-**18–20 — Lessons.** Give the audience three patterns they can reuse: bounded tools, a source ledger, and explicit gaps. Close with the repository and one command to run the demo.
-
-## Q&A preparation
-
-- Why is it an agent? The model chooses and revises searches and reads based on tool feedback.
-- What stops invented citations? Sources must exist in the ledger, be read, and contain the quoted text.
-- What is still unsolved? Source trust, entailment, freshness, prompt injection, and cost predictability.
-- What happens without API keys? The synthetic demo works; live mode fails with a clear configuration error.
-- Why SQLite? Easy local setup and inspectable run history. It is not an enterprise multi-user data layer.
-- Next steps? Measured live evaluations, resumable jobs, semantic entailment checks, and a human review stage.
+- **Where is the reasoning?** Nimble's hosted Agent API.
+- **Why Extract too?** An independent retrieval checks the quote against current page text.
+- **What does the app prove?** That the returned quote was retrieved, not that its claim is true.
+- **What happens on timeout?** The local client stops waiting; the remote run may continue. Inspect its saved IDs before resubmitting.
+- **What needs more work?** Resuming remote runs, cancellation, cost reporting, and measured evaluations.

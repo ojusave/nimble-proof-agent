@@ -1,29 +1,21 @@
-# Design notes
+# Design
 
-## Keep the boundaries visible
+Nimble Agent API handles research and reasoning. Python manages the run, checks evidence, and saves it to SQLite. JavaScript displays progress and results. No separate model API key is needed.
 
-Claude chooses actions. Nimble retrieves public web evidence. Python owns the source IDs and validates quotations. SQLite retains traces. The browser displays the result without trusting source HTML.
+## Evidence
 
-The model has no tool to execute code, send email, modify files, or request arbitrary local URLs. Source IDs prevent a final answer from introducing a never-retrieved citation.
+The agent returns up to five findings with quotes and source URLs. URLs must appear in its source report. Proof then calls Nimble Extract on each cited page and checks the quoted text. Rejected findings appear under gaps. If no finding passes, the run fails. For partial results, a factual status line replaces the generated summary.
 
-## Why two web tools?
+This checks text provenance, not truth or logical entailment. Dynamic pages, extraction differences, and page changes can cause valid quotes to fail. Source text is rendered as plain text.
 
-Search is for discovery. Extract is for inspection. A search snippet can omit the plan restriction that changes an answer. The validator therefore requires a successful read, even when Search already returns a plausible snippet.
+## Remote lifecycle
 
-## Why no framework?
+Create a low-effort run, poll its state, then fetch the structured output. The create request has no automatic retries: a lost response could still have created a paid job. Read requests retry transient HTTP errors twice.
 
-The tool loop is small enough to read in one sitting. Framework abstraction would obscure the exact place where evidence is accepted or rejected. HTTP adapters use the Python standard library, making the offline demo runnable without package installation.
+The client waits for up to five minutes between requests. Individual HTTP requests can take 90 seconds, and extraction adds time. If waiting stops, the remote run may continue. Its IDs remain in the activity log; the app does not cancel it or start a replacement automatically.
 
-## Why not claim fact checking?
+The local server accepts one run at a time. Runs do not resume automatically after restart. The remote research agent's internal search count and monetary cost are controlled by Nimble, not the old local demo tool budget.
 
-Substring matching can prove that text is present, not that it supports a claim. A second semantic judge could help, but would add another fallible model and more cost. The UI and exports expose quotes and gaps for human review.
+## Demo
 
-## Budgets and failure
-
-A live run allows 12 tool calls and 10 model turns, and each request has a 90-second timeout. Transient HTTP failures retry at most twice. These bounds limit work but do not constitute a guaranteed monetary ceiling. Provider errors are returned to the model for recovery; an exhausted run is explicitly failed.
-
-The prototype accepts one running job. SQLite uses parameterized SQL and short-lived connections. Runs execute in a background thread; closing the app interrupts outstanding work. Resuming interrupted runs and cancellation are future work.
-
-## Live evaluation plan
-
-Use a versioned set of technical questions with human-checked sources. Record answer coverage, unsupported claims, quote acceptance/rejection, extraction failures, provider usage, and latency. Run the same set against alternative retrieval adapters. Report results only after collecting real data; synthetic fixtures cannot measure live quality.
+The offline demo retains a small scripted tool loop to exercise the ledger and UI without credentials. It is labelled synthetic and does not call the hosted agent.
