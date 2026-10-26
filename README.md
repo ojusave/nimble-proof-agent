@@ -4,7 +4,7 @@
 
 Upload a résumé, describe the job you want, and choose how many results to find. Default: **5**.
 
-The agent searches employer listings, reads the requirements, and checks the fit against résumé evidence. Cards appear as each listing finishes. The activity feed shows real tool calls and outputs through server-sent events.
+The agent searches employer listings, reads the requirements, and checks the fit against résumé evidence. Cards appear as each listing finishes. Activity follows one timeline: résumé, search, listing checks, and ranking. Each listing updates in place; inputs, outputs, and provider updates are available on demand. Events arrive through server-sent events.
 
 ## Run
 
@@ -69,7 +69,7 @@ Use the same interfaces and event format for another assignment. New business ru
 
 Résumés are saved locally until removed. Obvious email and phone strings are removed before requests; remaining résumé text and job pages are sent to Nimble. Removing a résumé deletes its original file and stored text; previous results retain selected supporting quotations.
 
-`data/`, `.env`, and `.venv/` are excluded from Git. The server binds to localhost, checks origins, and exposes only the three UI files. No LangSmith account, tracing service, or frontend build service is required.
+`data/`, `.env`, and `.venv/` are excluded from Git. The server binds to localhost, checks origins, and exposes only the allowlisted UI files. No LangSmith account, tracing service, or frontend build service is required.
 
 Live searches use Nimble credits. Agent creation is not retried automatically; a lost response can still have created a paid job. Provider tasks can run for minutes. The UI relays public provider progress when available and otherwise shows actual queued/running status. It never fabricates internal reasoning. Closing the browser leaves the server running; restarting the server interrupts local workflows. Automatic workflow resumption and cancellation are not implemented.
 
@@ -77,11 +77,14 @@ Live searches use Nimble credits. Agent creation is not retried automatically; a
 
 ```sh
 python -m unittest discover -s tests -v
+node tests/activity.test.mjs  # Node 18+, no npm dependencies
 ```
 
 Tests cover the actual LangGraph flow, strict/unknown requirements, fabricated evidence, source failures, résumé formats, uploads/removal, concurrent events, SSE replay, and exports. The synthetic demo runs the same workflow with fixture adapters. Live provider checks require the local key.
 
 [Design](docs/design.md) · [Demo walkthrough](docs/demo.md) · [Open-source components](NOTICE.md)
+
+The browser bundle is checked in. After editing `web/activity.mjs` or `web/search.js`, run `python scripts/build_web.py`; no npm packages are needed.
 
 Run the same job workflow offline with `python app.py demo`.
 

@@ -10,7 +10,7 @@ from adapters.demo import DemoAdapter,SAMPLE_RESUME
 from adapters.resume.parser import parse_resume,professional_text
 from adapters.storage.sqlite import Repository
 from core.settings import Settings
-from core.models import SearchRequest
+from core.models import SearchRequest,event
 from workflows.job_matcher import JobWorkflow,contains
 from runners.langgraph import LangGraphRunner
 from api.app import create_app
@@ -110,6 +110,18 @@ class WorkflowTests(unittest.TestCase):
             'query':'Developer advocate, remote, US','count':1,'max_rounds':1,'demo':True})
         self.assertTrue(adapter.sizes)
         self.assertLessEqual(max(adapter.sizes),10000)
+
+    def test_provider_updates_keep_their_round_and_candidate_identity(self):
+        class ReportingAdapter(DemoAdapter):
+            def structured(self,task,schema,purpose,emit):
+                emit(event('provider_status',purpose,'Running',status='running'))
+                return super().structured(task,schema,purpose,emit)
+        _,events=self.run_workflow(ReportingAdapter())
+        updates=[item for item in events if item['type']=='provider_status' and item['step']=='match']
+        self.assertEqual(len(updates),6)
+        self.assertTrue(all(len(item['data']['candidate_ids'])==1 for item in updates))
+        self.assertTrue(all(item['data']['round']==1 for item in updates))
+        self.assertEqual(len({item['data']['candidate_ids'][0] for item in updates}),6)
 
     def test_logs_do_not_include_resume_text(self):
         _,events=self.run_workflow()
@@ -218,3 +230,20 @@ class APITests(unittest.TestCase):
         stream=self.client.get('/api/searches/'+rid+'/events',headers={'Last-Event-ID':str(cursor)})
         self.assertEqual(stream.text.count('event: activity'),1)
         self.assertIn('event: done',stream.text)
+
+
+class StartupTests(unittest.TestCase):
+    def test_busy_port_is_rejected_before_opening_storage(self):
+        import socket
+        import contextlib
+        from unittest.mock import patch
+        from app import main
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1',0))
+            listener.listen()
+            port=listener.getsockname()[1]
+            with patch('sys.argv',['app.py','serve','--port',str(port)]), patch('api.app.create_app') as factory:
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as stopped:
+                    main()
+                self.assertEqual(stopped.exception.code,2)
+                factory.assert_not_called()

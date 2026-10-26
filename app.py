@@ -17,9 +17,16 @@ def main():
     demo.add_argument('--count',type=int,default=5)
     args=parser.parse_args()
     if args.command=='serve':
+        import socket
         import uvicorn
         from api.app import create_app
-        uvicorn.run(create_app(),host='127.0.0.1',port=args.port)
+        # Claim the port before opening storage, which recovers interrupted runs.
+        with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            try: listener.bind(('127.0.0.1',args.port))
+            except OSError: parser.error('Port %s is already in use. The running app was left untouched.'%args.port)
+            server=uvicorn.Server(uvicorn.Config(create_app(),host='127.0.0.1',port=args.port))
+            server.run(sockets=[listener])
     else:
         from core.models import SearchRequest
         SearchRequest('sample',count=args.count).validate()
