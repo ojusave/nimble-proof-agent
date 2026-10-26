@@ -112,7 +112,11 @@ def create_app(settings=None,repository=None,provider=None):
 
     @app.post('/api/demo',status_code=202)
     def demo():
-        resume=repository.save_resume('Demo resume.txt',SAMPLE_RESUME.encode(),SAMPLE_RESUME)
+        # Reusing the sample should not fill the résumé picker with duplicate files.
+        resume=next((row for row in repository.list_resumes()
+                     if repository.resume(row['id'])['text']==SAMPLE_RESUME),None)
+        if resume is None:
+            resume=repository.save_resume('Sample résumé.txt',SAMPLE_RESUME.encode(),SAMPLE_RESUME)
         return start(SearchBody(resume_id=resume['id'],query='Developer advocate, remote, US',count=5,demo=True))
 
     @app.get('/api/searches/{rid}/events')

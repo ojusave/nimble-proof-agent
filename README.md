@@ -25,7 +25,7 @@ Set `NIMBLE_API_KEY` in `.env`, then:
 python app.py serve
 ```
 
-Open http://127.0.0.1:8765. **Try a sample search** uses a fictional résumé and jobs with no API calls. PDF, DOCX, and UTF-8 TXT résumés are supported. Scanned PDFs need OCR first. Provider prompts use bounded résumé and listing excerpts to fit Nimble’s input limit; content beyond those excerpts may be missed.
+Open http://127.0.0.1:8765. **Try a sample** uses a fictional résumé and jobs with no API calls. PDF, DOCX, and UTF-8 TXT résumés are supported. Scanned PDFs need OCR first. Provider prompts use bounded résumé and listing excerpts to fit Nimble’s input limit; content beyond those excerpts may be missed.
 
 ## Workflow
 

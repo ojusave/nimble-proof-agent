@@ -194,6 +194,7 @@ class JobWorkflow:
                 fit=a['relevance'],checks=checks,strengths=strengths,gaps=gaps,summary=a['summary']).to_dict()
         job['open_evidence']=a.get('open_evidence','') if contains(a.get('open_evidence'),item['text']) else ''
         job['unknown_requirements']=uncertain
+        if state.get('demo'): job['sample_listing']=item['text']
         return ('unknown' if uncertain else 'match'),job
 
     def screen(self,state):

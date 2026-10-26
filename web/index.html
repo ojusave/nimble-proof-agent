@@ -1,26 +1,68 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proof — Find jobs</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Proof — Find jobs</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
 <body>
-<header class="topbar"><a href="/" class="brand">proof<span>/ jobs</span></a><div class="top-right"><span id="connection" class="connection">Connecting</span><a href="https://github.com/ojusave/nimble-proof-agent" target="_blank" rel="noopener noreferrer">Source code ↗</a></div></header>
-<main><div class="page-title"><h1>Find your next role.</h1><p>Your résumé. Your requirements. Jobs checked at the source.</p></div>
-<div class="workspace">
-<aside class="controls"><form id="search-form">
-<section class="control-section"><div class="label-row"><label for="resume-file">01 <span>Your résumé</span></label><span class="small">PDF · DOCX · TXT</span></div>
-<label class="upload-box" id="upload-box" for="resume-file"><span class="upload-icon">↑</span><strong id="upload-title">Upload résumé</strong><span class="small">Choose a file · up to 3 MB</span><input type="file" id="resume-file" accept=".pdf,.docx,.txt"></label>
-<div id="saved-resume" hidden><label class="small" for="resume-select">Saved locally</label><div class="saved-row"><select id="resume-select" aria-label="Saved résumé"></select><button type="button" id="remove-resume" class="icon-button" title="Remove this résumé. Previous search results remain.">Remove</button></div></div>
-<p id="resume-status" class="small" role="status"></p></section>
-<section class="control-section"><label for="query">02 <span>What are you looking for?</span></label><textarea id="query" rows="4" maxlength="1500" placeholder="Developer advocate, remote in the US. Python or API experience."></textarea><p class="hint">Specific requirements are strict. We’ll flag anything the listing doesn’t confirm.</p></section>
-<section class="count-section"><label for="count">03 <span>Number of jobs</span></label><input id="count" type="number" min="1" max="20" value="5" required></section>
-<button id="search-button" class="primary" type="submit">Find jobs <span>→</span></button>
-<p class="privacy">Résumé text is sent to Nimble for matching. Saved locally until you remove it.</p>
-</form><div class="demo-row"><span>Want to see the flow?</span><button type="button" id="demo-button" class="text-button">Try a sample search</button></div>
-<details class="history"><summary>Recent searches</summary><div id="history"><p class="small">No searches yet.</p></div></details>
-<div class="stack">LangGraph · Nimble · SQLite<br><span>Open-source app. Hosted web APIs.</span></div></aside>
-<section class="output" aria-label="Search output"><div class="output-header"><div><div class="eyebrow">YOUR SHORTLIST</div><h2 id="result-title">Ready when you are</h2></div><a id="export" hidden>Export ↗</a></div>
-<div id="message" role="status" aria-live="polite"></div><div id="demo-note" class="notice" hidden>Sample search · fictional résumé and jobs · no live API calls</div>
-<div id="empty" class="empty"><div class="empty-symbol">↗</div><h3>Start with your résumé.</h3><p>We’ll find openings, check the requirements,<br>and show why each job fits.</p><div class="empty-steps"><span>Search</span><b>→</b><span>Check</span><b>→</b><span>Match</span></div></div>
-<div id="run-view" hidden><div class="run-grid"><div class="job-results"><div class="tabs" role="tablist" aria-label="Result types"><button id="matches-tab" role="tab" aria-selected="true">Matches <span id="match-count">0</span></button><button id="review-tab" role="tab" aria-selected="false">Needs review <span id="review-count">0</span></button></div><p id="ordering" class="hint">Matches appear as checked. Final ranking comes at the end.</p><div id="job-list"></div><div id="shortfall" class="shortfall" hidden></div><details id="excluded-section" class="excluded" hidden><summary id="excluded-title">Excluded listings</summary><div id="excluded-list"></div></details></div>
-<aside class="activity"><div class="activity-header"><div><span id="live-dot" class="live-dot"></span><strong id="activity-title">Working</strong></div><span id="elapsed">0:00</span></div><div id="stage" class="stage">Starting search</div><ol id="activity-feed" aria-live="polite" aria-label="Backend activity"></ol><div class="activity-footer">Workflow events and tool outputs.</div></aside></div></div>
-</section></div></main>
-</body></html>
+  <a class="skip-link" href="#search-form">Skip to search</a>
+  <header class="topbar">
+    <a href="/" class="brand" aria-label="Proof home"><span class="brand-mark" aria-hidden="true">p</span>proof<span class="brand-section">jobs</span></a>
+    <nav aria-label="Search navigation">
+      <button id="new-search" class="quiet-button" type="button">New search</button>
+      <details class="history" id="history-menu">
+        <summary>History</summary>
+        <div id="history"><p>No searches yet.</p></div>
+      </details>
+    </nav>
+  </header>
+
+  <main>
+    <div class="intro"><h1>Find jobs that fit your résumé.</h1></div>
+    <form id="search-form" class="composer">
+      <label for="query" class="field-label">Job preferences <span class="optional">optional</span></label>
+      <textarea id="query" rows="2" maxlength="1500" placeholder="Developer advocate, remote in the US, Python…"></textarea>
+      <div class="composer-toolbar">
+        <div class="attachment">
+          <label class="attach-button" for="resume-file"><span aria-hidden="true">+</span><span id="upload-title">Attach résumé</span><input type="file" id="resume-file" accept=".pdf,.docx,.txt" aria-label="Attach résumé (PDF, DOCX or TXT, up to 3 MB)"></label>
+          <div id="saved-resume" class="saved-resume" hidden>
+            <select id="resume-select" aria-label="Saved résumé"></select>
+            <button type="button" id="remove-resume" class="remove-button" aria-label="Remove résumé" title="Remove résumé; previous results remain">×</button>
+          </div>
+        </div>
+        <div class="search-actions">
+          <label for="count">Results</label><input id="count" type="number" min="1" max="20" value="5" required>
+          <button id="search-button" class="primary" type="submit">Search jobs <span aria-hidden="true">↗</span></button>
+        </div>
+      </div>
+      <div class="form-footnote"><span>Saved locally. Sent to Nimble for live searches.</span><span id="resume-status" role="status"></span></div>
+    </form>
+    <div id="message" role="status" aria-live="polite"></div>
+    <div id="empty" class="sample-prompt"><span>No résumé handy?</span><button type="button" id="demo-button" class="text-button">Try a sample <span aria-hidden="true">→</span></button></div>
+
+    <section id="output" class="output" aria-label="Search results" hidden>
+      <div id="run-view">
+        <details class="activity" id="activity-panel">
+          <summary class="activity-summary">
+            <span id="live-dot" class="live-dot" aria-hidden="true"></span>
+            <span id="stage" class="stage" role="status">Starting search</span>
+            <span id="progress-count" class="progress-count">0 of 5 matches</span>
+            <span id="elapsed" class="elapsed">0:00</span>
+            <span class="activity-toggle">Activity <span aria-hidden="true">⌄</span></span>
+          </summary>
+          <div class="activity-body"><div class="activity-heading"><strong id="activity-title">Live activity</strong><span id="activity-mode"></span></div><ol id="activity-feed" aria-label="Backend activity"></ol></div>
+        </details>
+        <div class="results-heading"><h2 id="result-title">Your shortlist</h2><span id="demo-note" class="sample-badge" title="Fictional résumé and jobs. No live API calls." hidden>Fictional sample</span><a id="export" hidden>Export ↗</a></div>
+        <div class="tabs" role="tablist" aria-label="Result types"><button id="matches-tab" role="tab" aria-selected="true" aria-controls="job-list" tabindex="0">Matches <span id="match-count">0</span></button><button id="review-tab" role="tab" aria-selected="false" aria-controls="job-list" tabindex="-1">Needs review <span id="review-count">0</span></button></div>
+        <div id="job-list" role="tabpanel" aria-labelledby="matches-tab"></div>
+        <div id="shortfall" class="shortfall" hidden></div>
+        <details id="excluded-section" class="excluded" hidden><summary id="excluded-title">Excluded listings</summary><div id="excluded-list"></div></details>
+      </div>
+    </section>
+    <footer><a href="https://github.com/ojusave/nimble-proof-agent" target="_blank" rel="noopener noreferrer">Source ↗</a><span id="connection"></span></footer>
+  </main>
+</body>
+</html>

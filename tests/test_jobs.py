@@ -187,6 +187,17 @@ class APITests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/resumes').json(),[])
         self.assertEqual(list((self.root/'resumes').iterdir()),[])
 
+    def test_repeated_sample_reuses_resume_and_preserves_source_evidence(self):
+        first=self.client.post('/api/demo').json()['id']
+        self.wait_for(first)
+        second=self.client.post('/api/demo').json()['id']
+        run=self.wait_for(second)
+        self.assertEqual(len(self.repo.list_resumes()),1)
+        jobs=run['result']['jobs']
+        self.assertEqual(len({job['title'] for job in jobs}),len(jobs))
+        self.assertTrue(all(job['strengths'][0]['job_quote'] in job['sample_listing'] for job in jobs))
+        self.assertEqual(len(run['result']['unknowns']),1)
+
     def test_missing_resume_invalid_count_and_origin(self):
         self.assertEqual(self.client.post('/api/searches',json={'resume_id':'missing'}).status_code,400)
         self.assertEqual(self.client.post('/api/searches',json={'resume_id':'x','count':0}).status_code,422)
