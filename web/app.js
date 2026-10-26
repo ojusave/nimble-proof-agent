@@ -1,95 +1,25 @@
-const $ = id => document.getElementById(id);
-let active = null;
-let generation = 0;
-const node = (tag, text, className) => {
-  const el = document.createElement(tag);
-  if (text !== undefined) el.textContent = text;
-  if (className) el.className = className;
-  return el;
-};
-function sourceLink(label, url) {
-  const a = node('a', label);
-  try { if (new URL(url).protocol !== 'https:') return node('span', label); }
-  catch { return node('span', label); }
-  a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; return a;
-}
-async function api(path, options) {
-  const response = await fetch(path, options);
-  const value = await response.json();
-  if (!response.ok) throw new Error(value.error || 'Request failed.');
-  return value;
-}
-function busy(value) {
-  $('run-button').disabled = value; $('demo-button').disabled = value;
-  $('run-button').textContent = value ? 'Investigating…' : 'Start research ↗';
-}
-async function history() {
-  const rows = await api('/api/runs');
-  if (!rows.length) return;
-  $('history').replaceChildren(...rows.map(row => {
-    const button = node('button', (row.mode === 'demo' ? 'DEMO · ' : '') + row.question.slice(0, 75));
-    button.onclick = () => watch(row.id); return button;
-  }));
-}
-function render(run) {
-  $('run-view').hidden = false;
-  $('run-state').textContent = run.status;
-  $('mode-note').textContent = run.mode === 'demo'
-    ? 'Demo · Fictional data. No API calls.'
-    : 'Live · Nimble Agent API. Quotes checked against retrieved pages.';
-  $('trace').replaceChildren(...run.events.map(event => {
-    const detail = event.detail;
-    const title = {start:'Started',search:'Searched the live web',read:'Read source ' + detail.source_id,finish:'Quotes checked',tool_error:'Tool returned an error',remote_run:'Nimble run created',remote_status:'Nimble: ' + detail.status}[event.type] || event.type;
-    const item = node('li', run.mode === 'demo' && event.type === 'search' ? 'Searched demo data' : title);
-    item.append(node('small', detail.query || detail.url || detail.error || (event.type === 'finish' ? detail.findings + ' findings with matching quotations' : detail.question || '')));
-    return item;
-  }));
-  if (run.error) $('message').textContent = run.error;
-  if (!run.result) return;
-  const {brief, sources} = run.result;
-  $('run-title').textContent = brief.title;
-  $('sources').replaceChildren(...sources.map(source => {
-    const box = node('div'); box.append(sourceLink(source.id + ' · ' + source.title, source.url));
-    box.append(node('small', source.read ? 'Full page read' : 'Search result only')); return box;
-  }));
-  const body = [node('h3', brief.title), node('p', brief.summary)];
-  for (const finding of brief.findings) {
-    const box = node('div', undefined, 'finding');
-    box.append(node('p', finding.claim), node('blockquote', finding.quote));
-    const source = sources.find(s => s.id === finding.source_id);
-    if (source) box.append(sourceLink('[' + source.id + '] View source ↗', source.url));
-    body.push(box);
-  }
-  body.push(node('h4', 'Gaps & limitations'));
-  const gaps = node('ul'); brief.gaps.forEach(gap => gaps.append(node('li', gap))); body.push(gaps);
-  $('brief').replaceChildren(...body);
-  $('download').href = '/api/runs/' + run.id + '/markdown';
-  $('download').download = 'proof-brief.md'; $('download').hidden = false;
-}
-async function watch(id) {
-  active = id; const mine = ++generation;
-  $('message').textContent = ''; $('run-title').textContent = 'Research';
-  $('brief').replaceChildren(node('p', 'Reading sources…', 'muted'));
-  $('sources').replaceChildren(); $('download').hidden = true; busy(true);
-  try {
-    while (mine === generation) {
-      const run = await api('/api/runs/' + id);
-      if (mine !== generation) return;
-      render(run);
-      if (run.status !== 'running') break;
-      await new Promise(resolve => setTimeout(resolve, 800));
-    }
-  } catch (error) { if (mine === generation) $('message').textContent = error.message; }
-  finally { if (mine === generation) { busy(false); history().catch(() => {}); } }
-}
-async function start(mode) {
-  $('message').textContent = ''; busy(true);
-  try {
-    const run = await api('/api/runs', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:$('question').value,mode})});
-    await watch(run.id);
-  } catch (error) { $('message').textContent = error.message; busy(false); }
-}
-$('research-form').onsubmit = event => { event.preventDefault(); start('live'); };
-$('demo-button').onclick = () => start('demo');
-api('/api/config').then(config => { $('connection').textContent = config.live_ready ? '● Live APIs configured' : '○ Demo ready · live keys needed'; }).catch(error => { $('message').textContent = error.message; });
-history().catch(error => { $('message').textContent = error.message; });
+const $=id=>document.getElementById(id);
+const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
+let demoMode=false,lastEventAt=0;
+let source=null,runId=null,started=0,timer=null,tab='matches',running=false,requested=5;
+let matches=new Map(),unknowns=new Map(),exclusions=[],seenEvents=new Set(),finalResult=null;
+function safeLink(label,url){try{if(new URL(url).protocol!=='https:')return el('span',label);}catch{return el('span',label);}const a=el('a',label);a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
+async function api(path,options){const r=await fetch(path,options);let data;try{data=await r.json();}catch{throw new Error('The server returned an unreadable response.');}if(!r.ok)throw new Error(typeof data.detail==='string'?data.detail:'Please check the form and try again.');return data;}
+function busy(value){running=value;$('search-button').disabled=value;$('demo-button').disabled=value;$('search-button').replaceChildren(el('span',value?'Searching…':'Find jobs'),el('span',value?'':'→'));}
+function elapsed(until=Date.now()){const seconds=Math.max(0,Math.floor((until-started)/1000));$('elapsed').textContent=Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');}
+async function loadResumes(selectId){const rows=await api('/api/resumes');const select=$('resume-select');const previous=selectId||select.value;select.replaceChildren(...rows.map(r=>{const o=el('option',r.name);o.value=r.id;return o;}));if(rows.some(r=>r.id===previous))select.value=previous;$('saved-resume').hidden=!rows.length;$('upload-title').textContent=rows.length?'Upload a different résumé':'Upload résumé';return rows;}
+$('resume-file').onchange=async()=>{const file=$('resume-file').files[0];if(!file)return;if(file.size>3*1024*1024){$('resume-status').textContent='Choose a file smaller than 3 MB.';return;}$('resume-status').textContent='Reading résumé…';$('search-button').disabled=true;try{const form=new FormData();form.append('file',file);const resume=await api('/api/resumes',{method:'POST',body:form});await loadResumes(resume.id);$('resume-status').textContent=resume.name+' · ready';}catch(error){$('resume-status').textContent=error.message;}finally{$('search-button').disabled=running;}};
+$('remove-resume').onclick=async()=>{const id=$('resume-select').value;if(!id)return;try{await api('/api/resumes/'+id,{method:'DELETE'});await loadResumes();$('resume-status').textContent='Résumé removed. Previous search results remain.';}catch(e){$('resume-status').textContent=e.message;}};
+function jobCard(job,review){const card=el('article',undefined,'job-card');const head=el('div',undefined,'job-head'),text=el('div');text.append(el('div',job.company,'company'),el('h3',job.title));head.append(text,el('span',review?'Needs review':job.fit==='strong'?'Strong fit':'Possible fit','fit'+(review?' review':'')));card.append(head);const meta=el('div',undefined,'job-meta');meta.append(el('span',job.location||'Location not stated'),el('span','·'),el('span','Employer listing checked'));card.append(meta,el('p',job.summary,'job-summary'));if(job.strengths?.length)card.append(el('p','✓ '+job.strengths[0].reason,'evidence-preview'));for(const gap of (review?job.unknown_requirements:job.gaps).slice(0,2))card.append(el('p',(review?'? ':'↳ ')+gap,'gap-preview'));const details=el('details'),summary=el('summary','Fit, gaps & source evidence');details.append(summary);for(const strength of job.strengths||[]){const row=el('div',undefined,'evidence-row');row.append(el('strong',strength.reason),el('p','Your résumé'),el('p',strength.resume_quote,'quote'),el('p','Job listing'),el('p',strength.job_quote,'quote'));details.append(row);}for(const check of job.checks||[]){const row=el('div',undefined,'check '+check.status);row.append(el('strong',check.status.toUpperCase()+' · '+check.requirement));if(check.evidence)row.append(el('p',check.evidence,'quote'));details.append(row);}if(job.open_evidence)details.append(el('p','Application evidence: '+job.open_evidence,'quote'));for(const gap of job.gaps||[])details.append(el('p','Gap: '+gap));card.append(details);const foot=el('div',undefined,'job-footer');foot.append(safeLink('View job ↗',job.url),el('span',job.provisional?'Provisional order':'#'+job.rank));card.append(foot);return card;}
+function renderJobs(){const reviewing=tab==='review';const jobs=reviewing?[...unknowns.values()]:[...matches.values()].slice(0,requested);$('match-count').textContent=Math.min(matches.size,requested);$('review-count').textContent=unknowns.size;$('matches-tab').setAttribute('aria-selected',String(!reviewing));$('review-tab').setAttribute('aria-selected',String(reviewing));$('job-list').replaceChildren(...jobs.map(j=>jobCard(j,reviewing)));if(!jobs.length)$('job-list').append(el('div',reviewing?'No listings need review yet.':running?'Checked matches will appear here.':'No matches met all requirements.','waiting-card'));}
+$('matches-tab').onclick=()=>{tab='matches';renderJobs();};$('review-tab').onclick=()=>{tab='review';renderJobs();};
+function addEvent(e){if(seenEvents.has(e.seq))return;seenEvents.add(e.seq);lastEventAt=Math.max(lastEventAt,new Date(e.at).getTime());const data=e.data||{};const label=data.tool||(e.step==='resume'?'Local résumé processing':e.step==='finish'?'Workflow':'LangGraph');const item=el('li');item.append(el('div',(demoMode&&label.startsWith('Nimble')?'Sample adapter · ':'')+label,'tool-label'),el('div',e.message,'event-message'));const info={...data};delete info.job;delete info.result;if(Object.keys(info).length){const d=el('details',undefined,'event-details');d.append(el('summary',e.type==='search_results'?'View listings returned':e.type==='plan_ready'?'View search plan':'View input / output'),el('pre',JSON.stringify(info,null,2)));item.append(d);}item.append(el('div',new Date(e.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),'event-time'));const feed=$('activity-feed');feed.append(item);feed.scrollTop=feed.scrollHeight;$('stage').textContent=e.message;if(e.type==='job_matched'){matches.set(data.job.id,data.job);renderJobs();}if(e.type==='job_unknown'){unknowns.set(data.job.id,data.job);renderJobs();}if(e.type==='job_excluded'){exclusions.push(data);renderExcluded();}if(e.type==='search_completed')complete(data.result);if(e.type==='run_failed')$('message').textContent=e.message;}
+function renderExcluded(){$('excluded-section').hidden=!exclusions.length;$('excluded-title').textContent='Excluded listings ('+exclusions.length+')';$('excluded-list').replaceChildren(...exclusions.map(j=>{const row=el('div');row.append(safeLink(j.title||j.url,j.url),el('p',j.reason));return row;}));}
+function complete(result){finalResult=result;$('stage').textContent='Found '+result.jobs.length+' of '+result.requested+' checked matches';matches=new Map(result.jobs.map(j=>[j.id,j]));unknowns=new Map(result.unknowns.map(j=>[j.id,j]));exclusions=result.excluded;renderJobs();renderExcluded();$('result-title').textContent=result.jobs.length+' of '+result.requested+' jobs matched';$('ordering').textContent='Ranked by professional fit and evidence. Unknown requirements are kept separate.';$('shortfall').hidden=!result.shortfall;if(result.shortfall){const box=$('shortfall');box.replaceChildren(el('strong',result.next_question),el('p','Your requirements have not been changed. Edit the preferences to try a different search.'));const b=el('button','Edit preferences','text-button');b.onclick=()=>{$('query').focus();$('query').scrollIntoView({behavior:'smooth',block:'center'});};box.append(b);}if(result.warnings?.length)$('message').textContent=result.warnings.join(' ');$('export').hidden=false;$('export').href='/api/searches/'+runId+'/export';}
+function finished(status){busy(false);clearInterval(timer);elapsed(lastEventAt||Date.now());$('live-dot').classList.add('done');$('activity-title').textContent=status==='complete'?'Finished':status==='interrupted'?'Interrupted':'Stopped';if(status!=='complete')$('result-title').textContent='Search '+status;loadHistory().catch(()=>{});}
+async function watch(id){if(source)source.close();runId=id;localStorage.setItem('proof-search-id',id);matches=new Map();unknowns=new Map();exclusions=[];seenEvents=new Set();finalResult=null;lastEventAt=0;tab='matches';$('activity-feed').replaceChildren();$('shortfall').hidden=true;$('export').hidden=true;$('message').textContent='';$('empty').hidden=true;$('run-view').hidden=false;$('live-dot').classList.remove('done');$('activity-title').textContent='Working';$('result-title').textContent='Finding your matches';$('ordering').textContent='Matches appear as checked. Final ranking comes at the end.';busy(true);let run;try{run=await api('/api/searches/'+id);}catch(e){$('message').textContent=e.message;finished('failed');return;}requested=run.count;started=new Date(run.created).getTime();$('demo-note').hidden=true;clearInterval(timer);timer=setInterval(elapsed,1000);elapsed();renderJobs();source=new EventSource('/api/searches/'+id+'/events');const current=source;source.addEventListener('activity',event=>{if(source!==current)return;const activity=JSON.parse(event.data);if(activity.type==='run_started'){demoMode=activity.data.demo;$('demo-note').hidden=!demoMode;}addEvent(activity);});source.addEventListener('done',event=>{if(source!==current)return;const done=JSON.parse(event.data);if(done.result)complete(done.result);if(done.error)$('message').textContent=done.error;finished(done.status);current.close();});source.onerror=()=>{if(source===current&&running)$('stage').textContent='Reconnecting to the activity stream…';};}
+$('search-form').onsubmit=async event=>{event.preventDefault();const resume=$('resume-select').value;if(!resume){$('resume-status').textContent='Upload a résumé first.';return;}$('message').textContent='';busy(true);try{const run=await api('/api/searches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume_id:resume,query:$('query').value,count:Number($('count').value)})});await watch(run.id);}catch(error){$('message').textContent=error.message;busy(false);}};
+$('demo-button').onclick=async()=>{busy(true);try{const run=await api('/api/demo',{method:'POST'});await loadResumes();await watch(run.id);}catch(e){$('message').textContent=e.message;busy(false);}};
+async function loadHistory(){const rows=await api('/api/searches');if(!rows.length)return;$('history').replaceChildren(...rows.map(r=>{const b=el('button',(r.query||'Résumé-based search').slice(0,70)+' · '+r.status);b.onclick=()=>watch(r.id);return b;}));}
+async function init(){try{const cfg=await api('/api/config');$('connection').textContent=cfg.live_ready?'Nimble connected':'Sample mode · key needed';$('connection').classList.toggle('ready',cfg.live_ready);await loadResumes();await loadHistory();const id=localStorage.getItem('proof-search-id');if(id)await watch(id);}catch(e){$('message').textContent=e.message;}}
+init();

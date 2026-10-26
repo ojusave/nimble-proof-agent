@@ -1,25 +1,22 @@
-# Demo
+# Demo walkthrough
 
-1. Set `NIMBLE_API_KEY` in `.env` and start `python3 app.py serve`.
-2. Ask a narrow comparison question using first-party documentation.
-3. Show the remote run status, then the local source reads and quote checks.
-4. Open a cited page and compare its text with the finding.
-5. Export the brief. Explain any gaps.
+1. Upload a résumé or select the saved fictional sample.
+2. Enter explicit preferences and request five jobs.
+3. Open the activity feed: show generated queries, Search results, Extract output, and Agent task status.
+4. Open a match card and compare its résumé quote with its job quote.
+5. Open Needs review. Explain why an unknown location or salary does not count as a match.
+6. Show one excluded listing and its conflicting requirement.
+7. Show the final ranking or shortfall prompt. Requirements never broaden silently.
+8. Export the shortlist.
 
-Record a successful live run as a backup. The offline demo uses fictional data; do not present it as a live result.
+Use real employer listings for the conference demo. Record a successful live run as backup. The sample search is fictional and labelled accordingly.
 
-## Talk outline — 20 minutes
+## 20-minute talk
 
-- **0–3:** Why a source link alone is not enough to trust an answer.
-- **3–6:** Nimble researches; the app checks quoted evidence.
-- **6–12:** Run the demo and inspect a source.
-- **12–16:** Show a rejected quote and explain the limits of text matching.
-- **16–20:** Walk through the code, tradeoffs, and next steps.
+- 0–3: Résumé search finds plausible jobs; a usable shortlist needs actual requirements and current listing evidence.
+- 3–6: Walk through the user flow and modular LangGraph architecture.
+- 6–12: Run the agent, inspect a match, and explain an exclusion.
+- 12–16: Show strict/unknown criteria, quote checks, provider delays, and failure handling.
+- 16–20: Explain Nimble's three roles, the open-source components, tradeoffs, and how to replace a provider.
 
-## Q&A
-
-- **Where is the reasoning?** Nimble's hosted Agent API.
-- **Why Extract too?** An independent retrieval checks the quote against current page text.
-- **What does the app prove?** That the returned quote was retrieved, not that its claim is true.
-- **What happens on timeout?** The local client stops waiting; the remote run may continue. Inspect its saved IDs before resubmitting.
-- **What needs more work?** Resuming remote runs, cancellation, cost reporting, and measured evaluations.
+Do not present quote matching as proof that a vacancy is open or a recommendation is correct. Do not claim superiority over other search providers without a measured comparison.

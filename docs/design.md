@@ -1,21 +1,35 @@
-# Design
+# System design
 
-Nimble Agent API handles research and reasoning. Python manages the run, checks evidence, and saves it to SQLite. JavaScript displays progress and results. No separate model API key is needed.
+The user uploads or reuses a résumé, enters optional preferences, chooses a count (default five), and clicks Find jobs. No separate setup wizard.
 
-## Evidence
+FastAPI creates a run and returns its ID immediately. A background worker runs a LangGraph workflow. The browser subscribes to its SSE stream; ordered events are persisted in SQLite and replayed on reconnect. One search is active per local server.
 
-The agent returns up to five findings with quotes and source URLs. URLs must appear in its source report. Proof then calls Nimble Extract on each cited page and checks the quoted text. Rejected findings appear under gaps. If no finding passes, the run fails. For partial results, a factual status line replaces the generated summary.
+## Workflow state
 
-This checks text provenance, not truth or logical entailment. Dynamic pages, extraction differences, and page changes can cause valid quotes to fail. Source text is rendered as plain text.
+Profile, original preferences, explicit requirements, requested count, search round, seen URLs, candidates, accepted matches, unknowns, exclusions, warnings, and final shortlist.
 
-## Remote lifecycle
+The graph is prepare → plan → discover → screen → finish. After screening, a conditional edge returns to planning if fewer matches qualify and the round budget remains. Original requirements are retained verbatim during replanning.
 
-Create a low-effort run, poll its state, then fetch the structured output. The create request has no automatic retries: a lost response could still have created a paid job. Read requests retry transient HTTP errors twice.
+## Replaceability
 
-The client waits for up to five minutes between requests. Individual HTTP requests can take 90 seconds, and extraction adds time. If waiting stops, the remote run may continue. Its IDs remain in the activity log; the app does not cancel it or start a replacement automatically.
+Business rules depend on SearchProvider, ExtractProvider, and Reasoner protocols. LangGraph is isolated in its runner. Composition wires the adapters; settings own keys and limits. The UI consumes domain events and job records, not provider SDK objects.
 
-The local server accepts one run at a time. Runs do not resume automatically after restart. The remote research agent's internal search count and monetary cost are controlled by Nimble, not the old local demo tool budget.
+## Evidence and decision rules
 
-## Demo
+A candidate must be an individual opening on an employer domain or recognized employer ATS. The model identifies the employer website; domain checks reject aggregators and mismatched hosts. This is evidence-based classification, not independent certification of domain ownership.
 
-The offline demo retains a small scripted tool loop to exercise the ledger and UI without credentials. It is labelled synthetic and does not call the hosted agent.
+Application availability needs an exact quote. Every explicit requirement is met, conflicting, or unknown. Missing checks and unverified quotes become unknown. Conflicts are excluded. At least one professional strength must have an exact résumé quote and exact listing quote. Protected or sensitive traits must not be used for matching.
+
+Matching is still model-based and can misinterpret text. Word matching does not prove entailment, current availability, or suitability. The UI exposes evidence and gaps for review. Unknown jobs are separate from qualifying matches.
+
+## Real-time events
+
+Events include type, stage, timestamp, tool, safe inputs, and actual output summaries. Events are emitted before and after calls; accepted/unknown/excluded records are emitted per candidate. Listing assessments run concurrently with at most two workers. IDs are assigned locally; requirement checks use fixed schema keys, so model-generated IDs cannot mix up listings. Providers may stream public progress; hidden reasoning is not requested or displayed.
+
+The stream reads a run-state snapshot before fetching its remaining events, preventing a final event from being skipped when completion races with delivery. Last-Event-ID allows reconnect without replaying old events.
+
+## Persistence and lifecycle
+
+Files and extracted résumé text are local. Removal deletes both; derived evidence in search history remains. Files and the database use owner-only permissions. Events never contain full résumés or credentials.
+
+The server runs independently of the browser. Local workflow execution is not checkpointed across server restarts; interrupted searches are marked accordingly. LangGraph checkpoint resumption, cancellation, authentication, and multi-user deployment are future work.
