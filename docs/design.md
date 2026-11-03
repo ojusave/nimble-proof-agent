@@ -1,6 +1,6 @@
 # System design
 
-Proof has two LangGraph workflows: document ingestion and research. React/Next.js renders the workspace; FastAPI owns operations; SQLite owns durable files, results, and ordered events. CopilotKit observes the existing search over AG-UI. It does not start a competing agent.
+Proof has three LangGraph workflows: resume ingestion, research, and selected-role tailoring. React/Next.js renders the workspace; FastAPI owns operations; SQLite owns durable files, results, and ordered events. CopilotKit observes the existing search over AG-UI. It does not start a competing agent.
 
 ## Ingestion
 
@@ -25,7 +25,7 @@ The location recognizer uses an offline place-name dataset and conservative head
 
 ```mermaid
 flowchart TD
-  START[Prepare parsed résumé and location] --> JOBS
+  START[Prepare parsed resume and location] --> JOBS
   START --> PROFILE[Research applicant public work, optional]
   subgraph JOBS[Job-search subgraph]
     P[Plan] --> D[Discover and stream candidates]
@@ -39,7 +39,7 @@ flowchart TD
   JOIN --> PICK[User chooses one role]
   PICK --> T[Separate LangGraph operation: Nimble follow-up]
   T --> V[Validate fact IDs and job quotes]
-  V --> STREAM[Stream per-role résumé proposals]
+  V --> STREAM[Stream per-role resume proposals]
   STREAM --> END[Persist final result]
 ```
 
@@ -47,19 +47,19 @@ The entire job-search subgraph is one parent branch. Putting a long applicant no
 
 Applicant research runs once per search when the user supplies professional identity URLs. These are starting points, not a domain allowlist. Nimble can investigate linked projects, contributions, talks, articles, and corroborating professional sources. It is instructed to resolve identity and personal contribution, exclude private-life/sensitive-attribute research, and distinguish individual work from team achievements.
 
-Returned facts require a public HTTPS source, a source quote, an attribution quote, and the provider’s explicit identity decision. Nimble Extract recaptures each cited page; both quotations must appear in that page. Unreadable sources or invented quotations do not become résumé evidence. Matching a quote does not prove the attribution is correct, so the applicant still confirms it.
+Returned facts require a public HTTPS source, a source quote, an attribution quote, and the provider’s explicit identity decision. Nimble Extract recaptures each cited page; both quotations must appear in that page. Unreadable sources or invented quotations do not become resume evidence. Matching a quote does not prove the attribution is correct, so the applicant still confirms it.
 
-Job research is independent and streams first. The join saves both results. Only a user request to `POST /api/searches/{id}/tailor` delegates a role-specific connection task to Nimble for the selected match/review role, using the role, captured job passages, original résumé context, and source-checked public facts. Output references local job IDs and fact IDs. A proposed addition must have a valid fact and an exact captured job quote. Remaining gaps stay explicit. Proposals do not automatically change match status. The follow-up uses the applicant agent’s `previous_interaction_id` when returned by Nimble, keeping context scoped to this applicant. A completed proposal is reused on repeated requests; it is not regenerated automatically.
+Job research is independent and streams first. The join saves both results. Only a user request to `POST /api/searches/{id}/tailor` delegates a role-specific connection task to Nimble for the selected match/review role, using the role, captured job passages, original resume context, and source-checked public facts. Output references local job IDs and fact IDs. A proposed addition must have a valid fact and an exact captured job quote. Remaining gaps stay explicit. Proposals do not automatically change match status. The follow-up uses the applicant agent’s `previous_interaction_id` when returned by Nimble, keeping context scoped to this applicant. A completed proposal is reused on repeated requests; it is not regenerated automatically.
 
-`POST /api/searches/{id}/resume-draft` accepts selected proposal indexes for one role and returns the original parsed résumé plus those additions as Markdown. It cannot accept arbitrary model text or unknown proposal indexes. The UI requires an attribution/wording confirmation for each addition. Neither the original file nor stored résumé text is overwritten.
+`POST /api/searches/{id}/resume-draft` accepts selected proposal indexes for one role and returns the original parsed resume plus those additions as Markdown. It cannot accept arbitrary model text or unknown proposal indexes. The UI requires an attribution/wording confirmation for each addition. Neither the original file nor stored resume text is overwritten.
 
 ## Discovery and decisions
 
-The local planner keeps a role prominent rather than stacking every skill into one query. It searches employer ATS pages first, then broadens discovery in a second round without relaxing requirements. A résumé-derived location becomes “work in or remotely from…”; an explicit location preference takes precedence.
+The local planner keeps a role prominent rather than stacking every skill into one query. It searches employer ATS pages first, then broadens discovery in a second round without relaxing requirements. A resume-derived location becomes “work in or remotely from…”; an explicit location preference takes precedence.
 
 A Search result is only a candidate. It emits `candidate_discovered` immediately, before Extract or Agent assessment. Known directory shapes and captured career-index headings are followed through relevant individual employer/ATS links; those links come from captured Markdown, never invented URLs. Recursive depth and total follow-up fan-out are bounded to prevent loops and duplicate paid work. The directory itself never qualifies as an opening.
 
-Each opening is extracted and investigated by Nimble. Local validation requires a specific opening, an employer/ATS host, usable listing identity, grounded résumé/listing strengths, and evidence for requested constraints. Conflicts exclude. Missing region, availability, or other required evidence sends a role to Needs review. With public-work research enabled, otherwise valid openings lacking résumé evidence can remain in review for the additional research; no unsupported claim is promoted to a confirmed match.
+Each opening is extracted and investigated by Nimble. Local validation requires a specific opening, an employer/ATS host, usable listing identity, grounded resume/listing strengths, and evidence for requested constraints. Conflicts exclude. Missing region, availability, or other required evidence sends a role to Needs review. With public-work research enabled, otherwise valid openings lacking resume evidence can remain in review for the additional research; no unsupported claim is promoted to a confirmed match.
 
 Source HTTP errors are reported explicitly. Retrieval/research failures are presented as Unverified, not lack of professional fit. Existing persisted `provider_error` exclusions receive the same presentation without rewriting their original traces. A completed run containing these failures is labelled “some pages unverified.”
 
@@ -108,7 +108,7 @@ One search runs per Python server. Opening assessments run with two workers; the
 
 Stop signals a shared cancellation token before queued work, new calls, retries, and polling. In-flight HTTP requests must return before local stopping completes. Already-accepted remote Nimble tasks may continue. The stopped result preserves matches, review items, applicant findings, and proposals already emitted. Closing an observer does not cancel the worker.
 
-Uploaded files, parsed metadata, SQLite, events, and derived evidence persist locally with owner-only file permissions. Removing a résumé deletes its file, text, and parse metadata, while earlier searches keep selected quotations. No credentials or full résumé inputs are emitted into traces. Full PDF bytes are transmitted to LlamaParse when configured; selected professional résumé context and supplied professional links go to Nimble.
+Uploaded files, parsed metadata, SQLite, events, and derived evidence persist locally with owner-only file permissions. Removing a resume deletes its file, text, and parse metadata, while earlier searches keep selected quotations. No credentials or full resume inputs are emitted into traces. Full PDF bytes are transmitted to LlamaParse when configured; selected professional resume context and supplied professional links go to Nimble.
 
 ## Hosted workspace
 
