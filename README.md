@@ -105,14 +105,14 @@ The result categories explain what the app established:
 The web app displays results and forwards requests to the Python API. FastAPI starts work and saves it. LangGraph coordinates three workflows: resume ingestion, research, and on-demand tailoring. Those workflows call replaceable provider adapters.
 
 ```mermaid
-flowchart TB
-    UI["Next.js + React<br/>UI, API proxy and CopilotKit runtime"]
-    API["FastAPI<br/>Commands and event streams"]
-    GRAPH["LangGraph workflows<br/>Ingest · Research · Tailor"]
-    STORE[("Files + SQLite<br/>Uploads, results and events")]
-    NIMBLE["Nimble adapters<br/>Search · Extract · Agent"]
-    PARSE["Resume parser adapters<br/>LlamaParse or local parsing"]
-    UI <-->|"Requests and live updates"| API
+flowchart LR
+    UI["Next.js + React<br/>UI + API proxy<br/>CopilotKit runtime"]
+    API["FastAPI<br/>Operations + events"]
+    GRAPH["LangGraph<br/>Workflow runner"]
+    STORE[("Files + SQLite<br/>Uploads + history")]
+    NIMBLE["Nimble<br/>Search / Extract / Agent"]
+    PARSE["Resume parsing<br/>LlamaParse / local"]
+    UI <--> API
     API <--> GRAPH
     API <--> STORE
     GRAPH --> NIMBLE
