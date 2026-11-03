@@ -72,3 +72,5 @@ The on-demand role endpoint was also exercised through the production UI against
 README images were recaptured from the updated local production build. The shortlist, evidence, and execution trace use the no-API fictional sample; the résumé-suggestion image uses a labelled controlled fixture. Older duplicate images were removed.
 
 A second generated-PDF upload through the production UI completed LlamaParse in 2.13 seconds and displayed parser job provenance, actual parse/profile node spans, and the inferred San Francisco location. Its screenshot is included in the README.
+
+The feature commit `954c7b6` passed all 14 desktop/mobile browser checks in [GitHub Actions](https://github.com/ojusave/nimble-proof-agent/actions/runs/41580234181) and was deployed to the existing paid Render service. Hosted checks verified authentication, preserved data, the four-match sample, exports, SSE, and CopilotKit replay without creating another search. A generated fictional PDF produced its first streamed event in 0.11 seconds; a subsequent sample search reused the saved LlamaParse job and emitted no new parser submission.

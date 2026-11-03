@@ -11,8 +11,8 @@
     "build": "next build",
     "start": "concurrently --kill-others --names agent,ui \".venv/bin/python app.py serve --port 8767\" \"next start --hostname 127.0.0.1 --port 8765\"",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "vitest run",
-    "test:ui": "playwright test"
+    "test": "vitest run --config tests/vitest.config.ts",
+    "test:ui": "playwright test --config tests/playwright.config.ts"
   },
   "dependencies": {
     "@ag-ui/client": "1.0.2",

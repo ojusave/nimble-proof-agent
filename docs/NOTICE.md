@@ -1,4 +1,4 @@
-# Open-source components
+# Dependency notices
 
 The application code is MIT licensed. Dependencies retain their own licenses:
 

@@ -191,4 +191,4 @@ python scripts/verify_nimble.py --live
 
 Reports are written to ignored `work/` storage. `.env`, uploaded files, local databases, generated builds, and verification artifacts are excluded from Git and Docker contexts.
 
-[System design](docs/design.md) · [Demo and talk notes](docs/demo.md) · [Dependency notices](NOTICE.md) · [MIT license](LICENSE)
+[System design](docs/design.md) · [Demo and talk notes](docs/demo.md) · [Dependency notices](docs/NOTICE.md) · [MIT license](LICENSE)
