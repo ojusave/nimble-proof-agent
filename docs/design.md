@@ -87,7 +87,7 @@ The worker then records `run_stopped`, persists a partial result assembled from 
 
 ## Hosted workspace
 
-`server/access.ts` is a replaceable access adapter for one shared workspace. Both `proxy.ts` and the API routes enforce HTTP Basic authentication in hosted mode. Render terminates HTTPS. The configured external origin is authoritative; forwarded host headers cannot enable the loopback bypass. Missing or weak hosted credentials fail closed. API bodies are bounded before being passed downstream. This is not per-user tenancy: anyone with the password shares all data and provider access.
+`server/access.ts` is a replaceable access adapter for one shared workspace. A sign-in page creates an eight-hour signed, Secure, HttpOnly cookie. Both `proxy.ts` and the API routes enforce the session in hosted mode; HTTP Basic remains available for API clients. Signing out clears the cookie, and rotating the workspace password invalidates existing sessions. Render terminates HTTPS. The configured external origin is authoritative; forwarded host headers cannot enable the loopback bypass. Missing or weak hosted credentials fail closed. API bodies are bounded before being passed downstream. This is not per-user tenancy: anyone with the password shares all data and provider access.
 
 The Docker image packages standalone Next.js and Python. `scripts/serve_hosted.py` binds Next.js to `0.0.0.0:$PORT`, leaves Python on loopback, forwards shutdown signals, and terminates both if either exits. `/api/health` checks the Python service and a SQLite read. `render.yaml` defines one paid service and a persistent disk mounted at `/var/data`.
 

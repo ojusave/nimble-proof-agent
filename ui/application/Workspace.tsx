@@ -8,7 +8,7 @@ import {SearchComposer} from '../components/SearchComposer';
 import {RunDashboard} from '../components/RunDashboard';
 import {Badge} from '../components/shared';
 
-export function Workspace() {
+export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
   const router = useRouter(), params = useSearchParams(), queryClient = useQueryClient();
   const runId = params.get('run');
   const config = useQuery({queryKey: ['config'], queryFn: repository.config});
@@ -78,7 +78,7 @@ export function Workspace() {
       {runId && search.isPending && <div className="loading-run" role="status"><LoaderCircle className="spin" size={20}/>Opening the saved search…</div>}
       {runId && search.error && <div className="notice error" role="alert"><p>{message(search.error)}</p><button className="text-button" onClick={newSearch}>Start a new search<ArrowRight size={14}/></button></div>}
       {search.data && runId && <SearchConnection key={runId} initialRun={search.data} repository={repository}><RunDashboard repository={repository} onEdit={edit} onStatus={updateStatus}/></SearchConnection>}
-      <footer className="workspace-footer"><a href="https://github.com/ojusave/nimble-proof-agent" target="_blank" rel="noopener noreferrer">Source code ↗</a><span>Saved in this workspace. Evidence stays open to review.</span></footer>
+      <footer className="workspace-footer"><a href="https://github.com/ojusave/nimble-proof-agent" target="_blank" rel="noopener noreferrer">Source code ↗</a>{canSignOut && <form action="/api/session" method="post"><input type="hidden" name="action" value="sign-out"/><button className="text-button" type="submit">Sign out</button></form>}<span>Saved in this workspace. Evidence stays open to review.</span></footer>
     </main>
   </>;
 }

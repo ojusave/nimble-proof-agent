@@ -1,4 +1,5 @@
 import {createHash, timingSafeEqual} from 'node:crypto';
+import {sessionFromRequest, validSession} from './session';
 
 const localHosts = ['127.0.0.1', 'localhost', '[::1]'];
 
@@ -28,11 +29,12 @@ export function requestAccess(request: Request): Response | null {
   if (hosted && (!publicUrl || !password || password.length < 24))
     return new Response('Workspace access is not configured.', {status: 503});
   if (!password) return null;
+  if (validSession(sessionFromRequest(request), password)) return null;
   const header = request.headers.get('authorization') || '';
   const credential = header.startsWith('Basic ') ? Buffer.from(header.slice(6), 'base64').toString('utf8') : '';
   if (sameSecret(credential, `${process.env.PROOF_ACCESS_USER || 'proof'}:${password}`)) return null;
   return new Response('Sign in to the Proof workspace.', {
     status: 401,
-    headers: {'WWW-Authenticate': 'Basic realm="Proof", charset="UTF-8"', 'Cache-Control': 'no-store'},
+    headers: {'Cache-Control': 'no-store'},
   });
 }

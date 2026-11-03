@@ -6,7 +6,7 @@ These are local results for the provider split, evidence handling, and React/Nex
 
 - 43 Python tests passed, including the full offline workflow, HTTP upload/start/result/SSE/export path, port binding, separate adapter composition, Agent lifecycle, trust retention, passage selection, malformed output isolation, fixed requirement IDs, rejection of fabricated evidence, AG-UI replay, failed runs, and concurrent tool identity.
 - 13 JavaScript activity checks passed, including local-planner labels and retention of research provenance for excluded candidates.
-- 13 Vitest checks passed for event deduplication, run state, requirement labels, operation outcomes, the loopback boundary, hosted password/origin checks, and bounded request bodies. TypeScript checking passed.
+- 15 Vitest checks passed for event deduplication, run state, requirement labels, operation outcomes, the loopback boundary, hosted password/origin checks, bounded request bodies, session expiry/tampering, and safe return paths. TypeScript checking passed.
 - Next.js production compilation, type checking, and static page generation passed.
 - 8 Chrome browser checks passed across desktop and mobile with CopilotKit: sample flow, evidence, exports, saved replay, interrupted connection recovery without creating a search, upload errors, incremental result delivery with evidence kept open, and failed-run presentation.
 - The native SSE replacement passed the same 6 applicable browser checks; the 2 tests that deliberately interrupt a CopilotKit request were skipped for that transport. This verifies the replacement with the same components and workflow, rather than only asserting an interface.
