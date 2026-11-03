@@ -12,12 +12,16 @@ export type Job = {
   research?: Research;
   evidence?: {source_characters: number; selected_characters: number; scanned_characters: number; scan_limited: boolean; passages: {id: string; start: number; end: number; text: string}[]};
 };
-export type Exclusion = {url: string; title: string; reason: string; category?: string};
-export type SearchResult = {jobs: Job[]; unknowns: Job[]; excluded: Exclusion[]; requested: number; rounds: number; shortfall: number; warnings: string[]; mode: string; next_question?: string; requirements: {id: string; text: string}[]};
-export type SearchRun = {id: string; created: string; resume_id: string; query: string; count: number; status: RunStatus; result: SearchResult | null; error: string | null};
+export type SearchLocation = {text: string; source: 'resume' | 'preferences'; evidence: string};
+export type Candidate = {id: string; url: string; title: string; snippet?: string; status: 'queued' | 'reading' | 'researching' | 'unverified'; reason?: string};
+export type ResumeProposal = {edits: {wording: string; evidence_id: string; job_quote: string; reason: string; source_url: string; source_quote: string; identity_quote: string}[]; remaining_gaps?: string[]; error?: string};
+export type PublicResearch = {status: string; facts: {id: string; claim: string; source_url: string; source_quote: string}[]; unresolved?: string[]};
+export type Exclusion = {url: string; title: string; reason: string; category?: string; candidate_id?: string};
+export type SearchResult = {jobs: Job[]; unknowns: Job[]; excluded: Exclusion[]; requested: number; rounds: number; shortfall: number; warnings: string[]; mode: string; next_question?: string; requirements: {id: string; text: string}[]; search_location?: SearchLocation; public_research?: PublicResearch; resume_proposals?: Record<string,ResumeProposal>};
+export type SearchRun = {id: string; created: string; resume_id: string; query: string; count: number; status: RunStatus; result: SearchResult | null; error: string | null; public_urls?: string[]};
 export type RecentRun = Pick<SearchRun, 'id' | 'created' | 'query' | 'count' | 'status'>;
-export type Resume = {id: string; name: string; created: string; characters: number};
-export type Config = {live_ready: boolean; framework: string; default_count: number; max_rounds: number};
+export type Resume = {id: string; name: string; created: string; characters: number; location?: SearchLocation; parser?: string};
+export type Config = {live_ready: boolean; framework: string; default_count: number; max_rounds: number; pdf_parser?: string};
 // Event payloads remain extensible across providers. Known UI result fields are typed above.
 export type ActivityEvent = {id: string; seq: number; at: string; type: string; step: string; message: string; data: Record<string, any>};
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed';

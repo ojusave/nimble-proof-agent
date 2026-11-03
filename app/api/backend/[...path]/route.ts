@@ -9,7 +9,7 @@ async function proxy(request: Request, context: {params: Promise<{path: string[]
   if (!['config', 'resumes', 'searches', 'demo'].includes(path[0]) || path.some(p => p === '..' || p.includes('/')))
     return new Response('Not found.', {status: 404});
   const headers = new Headers();
-  for (const name of ['content-type', 'last-event-id']) {
+  for (const name of ['content-type', 'last-event-id','accept']) {
     const value = request.headers.get(name); if (value) headers.set(name, value);
   }
   try {

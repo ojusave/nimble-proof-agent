@@ -5,10 +5,7 @@ import httpx
 
 from core.settings import Settings
 from core.cancellation import CancellationToken
-
-
-class ProviderError(RuntimeError):
-    pass
+from core.errors import ProviderError
 
 
 class NimbleClient:

@@ -6,6 +6,7 @@ import {ArrowRight, BriefcaseBusiness, ChevronDown, Clock3, CodeXml, LoaderCircl
 import {repository, SearchConnection} from '../composition';
 import {SearchComposer} from '../components/SearchComposer';
 import {RunDashboard} from '../components/RunDashboard';
+import type {ActivityEvent} from '../core/types';
 
 export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
   const router = useRouter(), params = useSearchParams(), queryClient = useQueryClient();
@@ -15,6 +16,8 @@ export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
   const history = useQuery({queryKey: ['history'], queryFn: repository.history});
   const search = useQuery({queryKey: ['run', runId], queryFn: () => repository.run(runId!), enabled: !!runId});
   const [selected, setSelected] = useState(''), [query, setQuery] = useState(''), [count, setCount] = useState(5);
+  const [publicUrls,setPublicUrls] = useState('');
+  const [uploadEvents,setUploadEvents]=useState<ActivityEvent[]>([]);
   const [error, setError] = useState(''), [status, setStatus] = useState('');
   const [uploading, setUploading] = useState(false), [starting, setStarting] = useState(false), [active, setActive] = useState(false);
   const [briefOpen, setBriefOpen] = useState(!runId);
@@ -27,15 +30,15 @@ export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
   }, [router]);
   useEffect(() => {
     if (!search.data) return;
-    setQuery(search.data.query); setCount(search.data.count); setSelected(search.data.resume_id);
+    setQuery(search.data.query); setCount(search.data.count); setSelected(search.data.resume_id); setPublicUrls((search.data.public_urls || []).join('\n'));
     setActive(['running', 'stopping'].includes(search.data.status)); setBriefOpen(false);
   }, [search.data?.id]);
   async function refresh() {await Promise.all([config.refetch(), resumes.refetch(), history.refetch()]);}
   async function upload(file: File) {
     if (file.size > 3 * 1024 * 1024) {setError('Choose a résumé smaller than 3 MB.'); return;}
     if (busy) return;
-    setUploading(true); setError(''); setStatus('');
-    try {const resume = await repository.upload(file); await queryClient.invalidateQueries({queryKey: ['resumes']}); setSelected(resume.id); setStatus('Résumé ready');}
+    setUploading(true); setError(''); setStatus('');setUploadEvents([]);
+    try {const resume = await repository.upload(file,item => setUploadEvents(previous => [...previous,item])); await queryClient.invalidateQueries({queryKey: ['resumes']}); setSelected(resume.id); setStatus('Résumé ready');}
     catch (cause) {setError(message(cause));} finally {setUploading(false);}
   }
   async function remove() {
@@ -48,14 +51,14 @@ export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
     if (!sample && !selected) {setError('Attach or select a résumé first.'); return;}
     lock.current = true; setStarting(true); setError(''); setStatus('');
     try {
-      const run = sample ? await repository.sample() : await repository.start({resume_id: selected, query, count});
+      const run = sample ? await repository.sample() : await repository.start({resume_id: selected, query, count, public_urls: publicUrls.split(/[\s,]+/).filter(Boolean)});
       await queryClient.invalidateQueries({queryKey: ['resumes']});
       navigate(run.id); setBriefOpen(false);
     } catch (cause) {setError(message(cause));}
     finally {lock.current = false; setStarting(false);}
   }
   function edit() {setBriefOpen(true); requestAnimationFrame(() => {brief.current?.scrollIntoView({block: 'center', behavior: 'smooth'}); document.getElementById('preferences')?.focus();});}
-  function newSearch() {router.push('/'); setSelected(''); setQuery(''); setCount(5); setActive(false); setBriefOpen(true); setError(''); setStatus('');}
+  function newSearch() {router.push('/'); setSelected(''); setQuery(''); setPublicUrls('');setUploadEvents([]); setCount(5); setActive(false); setBriefOpen(true); setError(''); setStatus('');}
   const loadError = config.error || resumes.error || history.error;
   return <>
     <a className="skip-link" href="#main">Skip to search</a>
@@ -68,7 +71,7 @@ export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
       {loadError && <div className="notice error" role="alert"><p>{message(loadError)}</p><button className="text-button" onClick={refresh}><RefreshCw size={14}/>Retry connection</button></div>}
       <details className={'search-brief ' + (!runId ? 'initial' : '')} open={briefOpen} onToggle={event => setBriefOpen(event.currentTarget.open)} ref={brief}>
         <summary><SlidersHorizontal size={16}/><div><strong>{query || 'Based on your résumé'}</strong><small>{resumes.data?.find(resume => resume.id === selected)?.name || 'Saved résumé'} · {count} matches requested</small></div><span>{briefOpen ? 'Close' : active ? 'Brief' : 'Edit'}<ChevronDown size={14}/></span></summary>
-        <SearchComposer resumes={resumes.data || []} selected={selected} query={query} count={count} disabled={!ready || busy} liveReady={!!config.data?.live_ready} uploading={uploading} status={status}
+        <SearchComposer uploadEvents={uploadEvents} resumes={resumes.data || []} selected={selected} query={query} count={count} disabled={!ready || busy} publicUrls={publicUrls} onPublicUrls={setPublicUrls} pdfParser={config.data?.pdf_parser} liveReady={!!config.data?.live_ready} uploading={uploading} status={status}
           onSelect={setSelected} onQuery={setQuery} onCount={setCount} onUpload={upload} onRemove={remove} onSubmit={(event: FormEvent) => {event.preventDefault(); void start();}}/>
       </details>
       {error && <div className="notice error" role="alert">{error}</div>}

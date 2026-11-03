@@ -43,3 +43,9 @@ Avoid opening `.env`, real uploaded résumés, or private search history on stag
 | 17–20 | Transfer the pattern | Apply the same boundaries to supplier checks, research tools, or support assistants. |
 
 Do not describe quote matching as proof of truth, confidence as a probability of correctness, or this project as a benchmark against other providers. The three APIs illustrate the design choices; using every API is not a goal in itself.
+
+## Optional research beyond the résumé
+
+The expanded flow adds a second Nimble research branch for public professional work, then lets the user select one role for a Nimble follow-up. Show one requirement → artifact quote → proposed bullet connection, with a gap that remains unresolved. The applicant confirms attribution and wording before downloading a separate draft; no perfect-fit score or invented experience is produced.
+
+For a code walkthrough, add `runners/resume_ingestion.py`, `adapters/llamaindex/parser.py`, and `workflows/applicant_research.py`, and `workflows/resume_tailoring.py`. Explain why the job-search subgraph runs alongside applicant research rather than waiting at the first planning-node barrier. Prepare completed research beforehand; early candidate cards show responsiveness without claiming the underlying investigation is instant.

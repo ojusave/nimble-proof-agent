@@ -52,3 +52,23 @@ Compatible dependency updates were applied, including Next.js and Hono patches. 
 ## Progressive activity and Stop
 
 A controlled, key-free provider was exercised through the browser: while Search was waiting, only two real stages appeared, with no result cards, tabs, or zero counters. Releasing Search revealed retrieval activity. Clicking Stop showed Stopping until the in-flight extraction returned, then Stopped, without starting Agent research. New search cleared the résumé, preferences, results, and trace. Python tests cover idempotent stop, partial results, queued call prevention, and Agent observation termination.
+
+## November 2 update: parsing, parallel research, and progressive results
+
+The earlier measurements above describe the previous implementation. The current changes have passed **59 Python tests, 18 Vitest tests, and 13 activity checks**, including actual nested-node span identity, upload event streaming, saved parser provenance, location precedence, parallel job/applicant execution, native Nimble follow-up requests, quotation rejection, and reviewed draft export. A passing mock test establishes request handling, not a live provider result.
+
+Live observations using isolated, ignored test artifacts:
+
+- A generated one-page fictional PDF was parsed by LlamaParse’s agentic tier in about five seconds. Its `San Francisco, CA` header location was recovered. No personal résumé was used for this parser test.
+- A location-aware Nimble Search/Extract/Agent flow found two stale employer URLs. One redirected to an index; the other was closed. Neither was presented as a fit rejection.
+- A separate known-opening check for SerpApi’s Python Developer Advocate returned a confirmed match for the fictional résumé, with paired quotes passing local validation. This is a single observed match, not a coverage benchmark.
+- Nimble applicant research against the owner’s public GitHub identity returned ten findings whose source/identity quotations passed recapture checks. A separate role-connection task returned six source-linked draft suggestions. Attribution and wording still require the applicant’s confirmation; no résumé was overwritten or published.
+- The completed applicant run exposes native continuation context. The adapter reuses that context for on-demand role tailoring instead of creating a new applicant identity.
+
+UI fixtures are labelled fictional and use isolated storage. The current interface shows discovered candidates before assessments, separates retrieval failures from exclusions even on older saved runs, and streams actual graph-node and parser events. Tailoring is now requested for a selected role; the search does not automatically create tailoring tasks for every result.
+
+The on-demand role endpoint was also exercised through the production UI against Nimble’s native continuation API. It completed with seven reviewable additions, retained the original match and résumé, and emitted 26 recorded events including the `connect_role` span. The result is retained privately in ignored test storage.
+
+README images were recaptured from the updated local production build. The shortlist, evidence, and execution trace use the no-API fictional sample; the résumé-suggestion image uses a labelled controlled fixture. Older duplicate images were removed.
+
+A second generated-PDF upload through the production UI completed LlamaParse in 2.13 seconds and displayed parser job provenance, actual parse/profile node spans, and the inferred San Francisco location. Its screenshot is included in the README.

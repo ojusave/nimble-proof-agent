@@ -36,7 +36,9 @@ class AgentEventBridge:
         if kind == 'tool_started':
             call_id = 'call_' + item['id']
             self.calls[key] = call_id
-            name = {'search': 'nimble_search', 'extract': 'nimble_extract', 'match': 'nimble_agent'}.get(step, step)
+            name = {'search': 'nimble_search', 'extract': 'nimble_extract', 'match': 'nimble_agent',
+                    'profile':'nimble_extract' if data.get('tool')=='Nimble Extract API' else 'nimble_applicant_research',
+                    'tailor':'nimble_role_resume_research'}.get(step, step)
             if self.demo:
                 name = 'sample_' + name
             args = {'query': data['query']} if 'query' in data else {
@@ -45,7 +47,8 @@ class AgentEventBridge:
             yield encode('TOOL_CALL_ARGS', toolCallId=call_id, delta=json.dumps(args))
             # AG-UI END closes the argument stream, not the provider execution.
             yield encode('TOOL_CALL_END', toolCallId=call_id)
-        elif kind in ('search_results', 'extraction_ready', 'research_completed', 'tool_failed'):
+        elif kind in ('search_results', 'extraction_ready', 'research_completed', 'tool_failed',
+                      'profile_source_checked','profile_research_completed','profile_research_failed','resume_proposals_ready','tailoring_failed'):
             call_id = self.calls.pop(key, None)
             if call_id:
                 output = {'message': item['message'], **data}

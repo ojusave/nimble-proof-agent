@@ -6,12 +6,15 @@ import {mergeEvent} from '../core/session';
 import type {ActivityEvent, ConnectionStatus, SearchRun} from '../core/types';
 
 export function CopilotConnection({initialRun, children}: ConnectionProps) {
-  const {agent, isReady} = useAgent({agentId: 'view-' + initialRun.id, runtimeAgentId: 'proof', threadId: initialRun.id});
+  const [attempt, setAttempt] = useState(0);
+  const [observerId]=useState(() => crypto.randomUUID());
+  // A fresh observer identity reads current persisted state rather than replaying
+  // CopilotKit's completed observation when this search starts on-demand tailoring.
+  const {agent, isReady} = useAgent({agentId: `view-${observerId}-${attempt}`, runtimeAgentId: 'proof', threadId: `${initialRun.id}-${observerId}-${attempt}`});
   const [run, setRun] = useState(initialRun);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [connection, setConnection] = useState<ConnectionStatus>('connecting');
   const [error, setError] = useState('');
-  const [attempt, setAttempt] = useState(0);
   const pending = useRef<Promise<unknown> | null>(null);
 
   useEffect(() => {
@@ -36,7 +39,7 @@ export function CopilotConnection({initialRun, children}: ConnectionProps) {
       // React StrictMode and reconnects must not overlap runs on one agent instance.
       await pending.current?.catch(() => {});
       if (disposed) return;
-      setConnection(attempt ? 'reconnecting' : 'connecting');
+      setConnection('connecting');
       const task = agent.runAgent({runId: crypto.randomUUID(), forwardedProps: {search_id: initialRun.id}});
       pending.current = task;
       try {

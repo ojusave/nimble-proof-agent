@@ -5,9 +5,10 @@ import {createActivityState, applyActivityEvent, finishActivity, describeStage} 
 import type {ActivityEvent, ConnectionStatus, SearchRun} from '../core/types';
 import {recordedOperations} from '../core/operations';
 import {Badge, SourceLink, sourceHost, elapsedLabel} from './shared';
+import {ExecutionTrace} from './ExecutionTrace';
 
 function stageTitle(stage: any) {
-  const name = {resume: 'Read résumé', search: 'Find openings', check: 'Investigate & check', shortlist: 'Build shortlist'}[stage.kind as string];
+  const name = {resume: 'Read résumé', search: 'Find openings', check: 'Investigate & check', profile:'Research public work',tailor:'Connect evidence to roles',shortlist: 'Build shortlist'}[stage.kind as string];
   return (name || stage.kind) + (stage.round > 1 ? ` · round ${stage.round}` : '');
 }
 function Call({call, focus, demo, now}: {call: any; focus?: {url: string; version: number}; demo: boolean; now: number}) {
@@ -66,6 +67,8 @@ export function TracePanel({events, run, demo, transport, connection, traceUrl, 
     <div className="trace-intro"><span className={'status-dot ' + (active ? 'pulse' : '')}/>{demo ? 'Fictional sample · no API calls' : active ? 'Updates appear as they arrive' : 'Saved events · original timestamps'}</div>
     {!!metrics.length && <div className="trace-metrics">{metrics.map(({icon: Icon, label, value}) => <div key={label}><Icon size={14}/><strong>{value}</strong><span>{label}</span></div>)}</div>}
     <div className="trace-scroll" ref={scroll} onScroll={event => {const node = event.currentTarget; following.current = node.scrollHeight - node.clientHeight - node.scrollTop < 40;}}>
+      {events.filter(event => event.type==='saved_ingestion').map(event => <ExecutionTrace key={event.id} events={event.data.events} active={false} saved/>)}
+      <ExecutionTrace events={events} active={active}/>
       {!state.stages.length && <div className="trace-empty">{connection === 'closed' ? <><CircleAlert size={18}/><p>No activity was recorded for this search.</p></> : <><LoaderCircle className="spin" size={18}/><p>{connection === 'connected' ? 'Waiting for the first recorded step…' : 'Connecting to the saved activity…'}</p></>}</div>}
       <ol className="trace-stages">{state.stages.map((stage: any) => <TraceStage key={stage.key} stage={stage} focus={focus} demo={demo} now={now}/>)}</ol>
     </div>

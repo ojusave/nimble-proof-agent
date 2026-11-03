@@ -72,7 +72,7 @@ class DemoAdapter:
         ]
         return ' '.join([role,job['work'],location,qualifications[number-1],'Apply for this job using our application form.'])
 
-    def structured(self,task,schema,purpose,emit):
+    def structured(self,task,schema,purpose,emit,continuation=None):
         payload=json.loads(task.split('\n',1)[1]);item=payload['candidates'][0]
         n=int(item['url'].rsplit('/',1)[-1]);job=JOBS[n-1]
         status='met' if n<=4 else 'unknown' if n==5 else 'conflict'

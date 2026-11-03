@@ -4,9 +4,11 @@ export interface SearchRepository {
   config(): Promise<Config>;
   resumes(): Promise<Resume[]>;
   history(): Promise<RecentRun[]>;
-  upload(file: File): Promise<Resume>;
+  upload(file: File,onProgress?: (event: ActivityEvent) => void): Promise<Resume>;
   removeResume(id: string): Promise<void>;
-  start(input: {resume_id: string; query: string; count: number}): Promise<{id: string}>;
+  start(input: {resume_id: string; query: string; count: number; public_urls?: string[]}): Promise<{id: string}>;
+  resumeDraft(id: string, jobId: string, edits: number[]): Promise<{markdown: string}>;
+  tailor(id: string,jobId: string): Promise<SearchRun>;
   sample(): Promise<{id: string}>;
   stop(id: string): Promise<SearchRun>;
   run(id: string): Promise<SearchRun>;

@@ -14,7 +14,10 @@ The application code is MIT licensed. Dependencies retain their own licenses:
 - TanStack Query: MIT — https://github.com/TanStack/query
 - Lucide: ISC — https://github.com/lucide-icons/lucide
 - Playwright and Vitest (development): Apache-2.0 and MIT — https://github.com/microsoft/playwright, https://github.com/vitest-dev/vitest
+- geonamescache: MIT; bundled GeoNames geographical data is CC BY 4.0 — https://github.com/yaph/geonamescache, https://www.geonames.org/about.html
 
 Dependency notices are included with installed distributions. `requirements.lock` and `package-lock.json` record tested versions. Nimble's hosted APIs are proprietary services, billed under your Nimble account.
 
 The search → enrichment → ranking pattern was informed by Nimble's public lead-generation cookbook: https://github.com/Nimbleway/cookbook-langchain-lead-gen. This project uses its own implementation; no cookbook source code is copied.
+
+LlamaParse is LlamaIndex's hosted document parsing service and has separate service terms. Proof calls its documented REST API; it does not redistribute LlamaParse server code.

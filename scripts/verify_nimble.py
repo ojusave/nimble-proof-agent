@@ -35,7 +35,7 @@ def main():
     # Separate from the user's résumé/history database. The saved report is ignored by Git.
     with tempfile.TemporaryDirectory(prefix='proof-verify-') as directory:
         settings = replace(settings, data_dir=Path(directory), max_rounds=1,
-                           candidates_per_round=args.candidates)
+                           candidates_per_round=args.candidates,linked_candidates=0)
         with TestClient(create_app(settings)) as client:
             upload = client.post('/api/resumes', files={'file': ('fictional-resume.txt', SAMPLE_RESUME.encode(), 'text/plain')})
             upload.raise_for_status()

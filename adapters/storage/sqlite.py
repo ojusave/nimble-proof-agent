@@ -23,6 +23,8 @@ class Repository:
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT,payload TEXT);
             CREATE INDEX IF NOT EXISTS events_run ON events(run_id,seq);
             ''')
+            if 'metadata' not in {row['name'] for row in db.execute('PRAGMA table_info(resumes)')}:
+                db.execute("ALTER TABLE resumes ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
             db.execute("UPDATE runs SET status='interrupted',error='Server restarted. Start a new search to continue.' WHERE status IN ('running','stopping')")
         os.chmod(self.path,0o600)
 
@@ -31,19 +33,25 @@ class Repository:
         db.row_factory=sqlite3.Row
         return db
 
-    def save_resume(self,name,content,text):
+    def save_resume(self,name,content,text,metadata=None):
         rid=uuid4().hex
         path=self.resumes/(rid+Path(name).suffix.lower())
         fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
         with os.fdopen(fd,'wb') as out: out.write(content)
         created=datetime.now(timezone.utc).isoformat()
         with self.connect() as db:
-            db.execute('INSERT INTO resumes VALUES(?,?,?,?,?)',(rid,Path(name).name,text,created,str(path)))
-        return {'id':rid,'name':Path(name).name,'created':created,'characters':len(text)}
+            db.execute('INSERT INTO resumes(id,name,text,created,path,metadata) VALUES(?,?,?,?,?,?)',
+                       (rid,Path(name).name,text,created,str(path),json.dumps(metadata or {})))
+        return self.resume_summary({'id':rid,'name':Path(name).name,'created':created,'characters':len(text),'metadata':json.dumps(metadata or {})})
+
+    @staticmethod
+    def resume_summary(row):
+        result=dict(row);metadata=json.loads(result.pop('metadata') or '{}')
+        return {**result,'location':metadata.get('profile',{}).get('location'),'parser':metadata.get('parser','local')}
 
     def list_resumes(self):
         with self.connect() as db:
-            return [dict(r) for r in db.execute('SELECT id,name,created,length(text) AS characters FROM resumes ORDER BY created DESC')]
+            return [self.resume_summary(r) for r in db.execute('SELECT id,name,created,length(text) AS characters,metadata FROM resumes ORDER BY created DESC')]
 
     def resume(self,rid):
         with self.connect() as db:
@@ -87,9 +95,12 @@ class Repository:
             db.execute("UPDATE runs SET status='stopping' WHERE id=? AND status='running'",(rid,))
 
     def run(self,rid):
-        with self.connect() as db: row=db.execute('SELECT * FROM runs WHERE id=?',(rid,)).fetchone()
+        with self.connect() as db:
+            row=db.execute('SELECT * FROM runs WHERE id=?',(rid,)).fetchone()
+            first=db.execute('SELECT payload FROM events WHERE run_id=? ORDER BY seq LIMIT 1',(rid,)).fetchone()
         if row is None: return None
         result=dict(row);result['result']=json.loads(result['result']) if result['result'] else None
+        result['public_urls']=json.loads(first['payload']).get('data',{}).get('public_urls',[]) if first else []
         return result
 
     def recent(self):

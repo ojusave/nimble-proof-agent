@@ -29,3 +29,22 @@ describe('transport-independent search state', () => {
     expect(claimLabel('$.open_status')).toBe('Listing availability');
   });
 });
+
+it('shows a discovered candidate before research and removes it when its assessment arrives', () => {
+  const candidate={id:'a',url:'https://employer.example/jobs/1',title:'Engineer'};
+  const discovered=event(1,'candidate_discovered',{candidate});
+  expect(runView(run,[discovered]).candidates[0].status).toBe('queued');
+  const reading={...event(2,'tool_started',{candidate_id:'a'}),step:'extract'};
+  expect(runView(run,[discovered,reading]).candidates[0].status).toBe('reading');
+  expect(runView(run,[discovered,reading,event(3,'job_unknown',{job:{id:'a'}})]).candidates).toHaveLength(0);
+});
+it('keeps retrieval errors unverified, including older saved exclusions', () => {
+  const e=event(1,'job_excluded',{candidate_id:'a',url:'https://employer.example/1',title:'Engineer',category:'provider_error',reason:'HTTP 404'});
+  const view=runView({...run,status:'complete'},[e]);
+  expect(view.excluded).toHaveLength(0);expect(view.candidates[0].status).toBe('unverified');
+});
+it('streams résumé proposals separately from job acceptance', () => {
+  const proposal={edits:[{wording:'A proposed addition'}]};
+  const view=runView(run,[event(1,'resume_proposals_ready',{candidate_id:'a',proposal})]);
+  expect(view.jobs).toHaveLength(0);expect(view.proposals.a).toEqual(proposal);
+});

@@ -54,6 +54,7 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(creation.args[2]['use_case'], 'research')
         self.assertEqual(creation.kwargs['retries'], 0)
         self.assertTrue(creation.args[2]['enable_events'])
+        self.assertEqual(creation.args[2]['effort'],'high')
         self.assertEqual([call.args[1] for call in request.call_args_list[1:]],
                          ['agents/agent/runs/run', 'agents/agent/runs/run', 'agents/agent/runs/run/result'])
         self.assertEqual(result.content['title'], 'Python Developer')
@@ -101,3 +102,16 @@ class ProviderTests(unittest.TestCase):
         self.assertIsInstance(services.reasoner, NimbleAgent)
         self.assertIs(services.search.client, services.extract.client)
         self.assertIs(services.extract.client, services.reasoner.client)
+
+    def test_native_followup_reuses_agent_and_interaction_without_recreating_identity(self):
+        client=self.client();adapter=NimbleAgent(client)
+        with patch.object(client,'request',side_effect=[
+            {'id':'followup','web_search_agent_id':'existing-agent','status':'completed','interaction_id':'next-context'},
+            {'output':{'type':'json','content':{'roles':[]},'trust':{}}},
+        ]) as request,patch.object(adapter,'progress'):
+            result=adapter.structured('Connect this selected role',{},'tailor',lambda e:None,
+                                      continuation={'agent_id':'existing-agent','interaction_id':'prior-context'})
+        self.assertEqual(request.call_args_list[0].args[1],'agents/existing-agent/runs')
+        self.assertEqual(request.call_args_list[0].args[2]['previous_interaction_id'],'prior-context')
+        self.assertEqual(request.call_args_list[0].kwargs['retries'],0)
+        self.assertEqual(result.continuation['interaction_id'],'next-context')

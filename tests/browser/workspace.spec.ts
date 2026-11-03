@@ -137,7 +137,12 @@ test('incremental results retain open evidence and a failed run stays failed', a
     await expect(page.locator('.trace-stage')).toHaveCount(2);
     await expect(page.locator('.trace-metrics')).toHaveCount(0);
     await expect(page.locator('.job-card')).toHaveCount(0);
-    emit(trace.events.slice(searching, boundary + 1));
+    const discovered=trace.events.findIndex((event: {type:string}) => event.type === 'candidate_discovered')+1;
+    emit(trace.events.slice(searching,discovered));
+    await expect(page.getByRole('tab',{name:'Checking 1',exact:true})).toBeVisible();
+    await expect(page.locator('.candidate-card')).toHaveCount(1);
+    await expect(page.locator('.candidate-state')).toContainText('Found');
+    emit(trace.events.slice(discovered,boundary+1));
     const card = page.locator(`[data-job-id="${firstJob.id}"]`);
     await card.getByRole('button', {name: 'Inspect evidence', exact: true}).click();
     await expect(card.locator('.job-evidence')).toBeVisible();
@@ -155,5 +160,68 @@ test('incremental results retain open evidence and a failed run stays failed', a
     await expect(page.getByText('No activity was recorded for this search.', {exact: true})).toBeVisible();
     await expect(page.getByRole('alert').filter({hasText: 'Fixture: provider could not return a result.'})).toBeVisible();
     await expect(page.getByRole('status').filter({hasText: 'Search complete'})).toHaveCount(0);
+  } finally {db.close();}
+});
+
+test('source-backed résumé additions require confirmation and download a separate draft', async ({page}) => {
+  test.skip(!process.env.PROOF_TEST_DB,'Requires isolated fixture storage.');
+  const {DatabaseSync}=await import('node:sqlite');
+  const sample=await (await page.request.post('/api/backend/demo')).json();
+  await expect.poll(async () => (await (await page.request.get(`/api/backend/searches/${sample.id}`)).json()).status).toBe('complete');
+  const run=await (await page.request.get(`/api/backend/searches/${sample.id}`)).json();
+  const job=run.result.jobs[0];
+  run.result.resume_proposals={[job.id]:{edits:[{wording:'Built a public Python integration.',evidence_id:'F1',job_quote:job.strengths[0].job_quote,reason:'Relevant developer tooling.',source_url:'https://portfolio.example/project',source_quote:'Built a public Python integration.',identity_quote:'Jordan Example authored the project.'}],remaining_gaps:['Production scale is not established.']}};
+  const db=new DatabaseSync(process.env.PROOF_TEST_DB!);const id=randomUUID().replaceAll('-','');
+  try {
+    db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?)').run(id,run.created,run.resume_id,'Draft fixture',5,'complete',JSON.stringify(run.result),null);
+    const original=db.prepare('SELECT text FROM resumes WHERE id=?').get(run.resume_id);
+    await page.goto('/?run='+id);
+    await page.locator(`[data-job-id="${job.id}"]`).getByRole('button',{name:'Inspect evidence',exact:true}).click();
+    const download=page.getByRole('button',{name:'Download résumé draft (.md)',exact:true});
+    await expect(download).toBeDisabled();
+    await page.getByRole('checkbox',{name:'This accurately describes my work; include this addition.'}).check();
+    await expect(download).toBeEnabled();
+    const received=page.waitForEvent('download');await download.click();
+    expect((await received).suggestedFilename()).toBe('proof-tailored-resume.md');
+    expect(db.prepare('SELECT text FROM resumes WHERE id=?').get(run.resume_id)).toEqual(original);
+    await expect(page.getByText('Production scale is not established.',{exact:true})).toBeVisible();
+  } finally {db.close();}
+});
+
+test('tailoring reopens a completed observer and streams the selected role without another search', async ({page}) => {
+  test.skip(!process.env.PROOF_TEST_DB, 'Requires isolated fixture storage.');
+  const {DatabaseSync}=await import('node:sqlite');
+  const sample=await (await page.request.post('/api/backend/demo')).json();
+  await expect.poll(async () => (await (await page.request.get(`/api/backend/searches/${sample.id}`)).json()).status).toBe('complete');
+  const run=await (await page.request.get(`/api/backend/searches/${sample.id}`)).json();
+  const db=new DatabaseSync(process.env.PROOF_TEST_DB!);const id=randomUUID().replaceAll('-','');
+  const job=run.result.jobs[0];
+  run.result.public_research={status:'complete',facts:[{id:'F1',claim:'Built a Python integration.',source_url:'https://portfolio.example/project',source_quote:'Built a Python integration.',identity_quote:'Jordan authored the project.'}],unresolved:[]};
+  let creations=0,tailoring=0;
+  page.on('request',request => {if(request.method()==='POST' && /\/api\/backend\/(searches|demo)$/.test(request.url())) creations++;});
+  const emit=(type:string,data:Record<string,unknown>) => db.prepare('INSERT INTO events(run_id,payload) VALUES(?,?)').run(id,JSON.stringify({type,step:'tailor',message:type,at:new Date().toISOString(),data}));
+  try {
+    db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?)').run(id,run.created,run.resume_id,'Fictional tailoring fixture',5,'complete',JSON.stringify(run.result),null);
+    await page.route(`**/api/backend/searches/${id}/tailor`,async route => {
+      tailoring++;expect(route.request().postDataJSON()).toEqual({job_id:job.id});
+      db.prepare('UPDATE runs SET status=? WHERE id=?').run('running',id);
+      emit('tailoring_requested',{candidate_id:job.id});
+      emit('node_started',{span_id:'tailoring-fixture',framework:'LangGraph',graph:'role-tailoring',node:'connect_role',input:{}});
+      await route.fulfill({json:{...run,id,status:'running'}});
+    });
+    await page.goto('/?run='+id);
+    await expect(page.getByRole('status').filter({hasText:'Search complete'})).toBeVisible();
+    await page.locator(`[data-job-id="${job.id}"]`).getByRole('button',{name:'Tailor résumé for this role',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Stop',exact:true})).toBeVisible();
+    await page.getByRole('button',{name:/^Activity/}).click();
+    await expect(page.locator('.execution-node').filter({hasText:'connect_role'})).toContainText('Running');
+    const proposal={edits:[{wording:'Built a Python integration.',evidence_id:'F1',job_quote:job.strengths[0].job_quote,source_url:'https://portfolio.example/project',source_quote:'Built a Python integration.',identity_quote:'Jordan authored the project.',reason:'Supports the role.'}],remaining_gaps:[]};
+    run.result.resume_proposals={[job.id]:proposal};
+    emit('node_completed',{span_id:'tailoring-fixture',framework:'LangGraph',graph:'role-tailoring',node:'connect_role',duration_ms:100,output:{}});
+    emit('tailoring_completed',{candidate_id:job.id});
+    db.prepare('UPDATE runs SET status=?,result=? WHERE id=?').run('complete',JSON.stringify(run.result),id);
+    await expect(page.getByText('1 résumé suggestion ready to review',{exact:true})).toBeVisible();
+    await expect(page.locator('.execution-node').filter({hasText:'connect_role'})).toContainText('Completed');
+    expect(creations).toBe(0);expect(tailoring).toBe(1);
   } finally {db.close();}
 });

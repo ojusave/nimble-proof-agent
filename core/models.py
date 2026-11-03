@@ -12,6 +12,7 @@ class ResearchResult:
     trust: dict = field(default_factory=dict)
     run_id: str = ''
     agent_id: str = ''
+    continuation: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

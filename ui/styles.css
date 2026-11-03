@@ -1,6 +1,7 @@
 @import './styles/base.css';
 @import './styles/workspace.css';
 @import './styles/results.css';
+@import './styles/progress.css';
 @import './styles/evidence.css';
 @import './styles/activity.css';
 @import './styles/sign-in.css';

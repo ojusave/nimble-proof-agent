@@ -13,8 +13,14 @@ class Settings:
     data_dir: Path = ROOT / 'data'
     max_rounds: int = 2
     candidates_per_round: int = 12
+    linked_candidates: int = 12
     request_timeout: int = 90
-    agent_timeout: int = 300
+    agent_timeout: int = 1200
+    agent_effort: str = 'high'
+    llama_api_key: str = ''
+    llama_api_base: str = 'https://api.cloud.llamaindex.ai'
+    llama_parse_version: str = '2026-09-29'
+    llama_parse_timeout: int = 180
 
     @classmethod
     def load(cls):
@@ -27,4 +33,5 @@ class Settings:
                 if sep and not key.strip().startswith('#'):
                     env[key.strip()] = value.strip().strip('\"\'')
         return cls(api_key=os.environ.get('NIMBLE_API_KEY', env.get('NIMBLE_API_KEY', '')),
+                   llama_api_key=os.environ.get('LLAMA_CLOUD_API_KEY', env.get('LLAMA_CLOUD_API_KEY', '')),
                    data_dir=Path(os.environ.get('PROOF_DATA_DIR', str(ROOT/'data'))))

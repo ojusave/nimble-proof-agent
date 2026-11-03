@@ -1,96 +1,119 @@
 # System design
 
-The user uploads or reuses a résumé, enters optional preferences, chooses a count (default five), and clicks Find jobs. No separate setup wizard.
+Proof has two LangGraph workflows: document ingestion and research. React/Next.js renders the workspace; FastAPI owns operations; SQLite owns durable files, results, and ordered events. CopilotKit observes the existing search over AG-UI. It does not start a competing agent.
 
-React and Next.js render the workspace. TanStack Query handles saved data and request state. FastAPI creates a search and returns its ID immediately; a background worker executes the real LangGraph workflow. Ordered domain events are persisted in SQLite. CopilotKit's headless `useAgent` subscribes through a local runtime to an AG-UI observer of that existing search. One search is active per Python server.
+## Ingestion
 
 ```mermaid
 flowchart LR
-    UI[React workspace] -->|create search once| REST[FastAPI REST]
-    REST --> GRAPH[LangGraph runner]
-    GRAPH --> RULES[JobWorkflow + provider ports]
-    RULES --> APIs[Nimble adapters]
-    RULES --> EVENTS[SQLite events and results]
-    EVENTS --> BRIDGE[Read-only AG-UI bridge]
-    BRIDGE --> RUNTIME[CopilotKit runtime]
-    RUNTIME --> SESSION[SearchSession adapter]
-    SESSION --> TRACE[Trace and evidence components]
-    EVENTS --> SSE[Native SSE alternative]
-    SSE --> SESSION
+  Upload[PDF / DOCX / TXT] --> Validate[Size, type and PDF page checks]
+  Validate --> Parse[LangGraph parse node]
+  Parse --> Cloud[LlamaParse PDF adapter]
+  Parse --> Local[Local DOCX / TXT / fallback PDF adapter]
+  Cloud --> Profile[LangGraph profile node]
+  Local --> Profile
+  Profile --> Store[(Original file, text, pages, parser provenance, location)]
 ```
 
-## Workflow state
+`ResumeParser` is a provider-neutral port. `RoutedResumeParser` selects LlamaParse for PDFs when a key is configured; TXT and DOCX remain local. LlamaParse uses the documented v2 multipart upload, polls the parse job, and requests only page Markdown. The agentic tier handles layout and OCR; its version is pinned in settings. Creation occurs once. A configured cloud failure is surfaced, not silently converted into a lower-quality local success.
 
-Profile, original preferences, explicit requirements, requested count, search round, seen URLs, candidates, accepted matches, unknowns, exclusions, warnings, and final shortlist.
+Limits are 3 MB and ten PDF pages, checked before transmission. Encrypted/malformed PDFs fail locally. Upload parsing runs in a thread pool so cloud polling does not block the FastAPI event loop. Original bytes, cleaned text, page output, parse job ID/version, and extracted profile are saved together. Existing databases receive an additive metadata-column migration.
 
-The graph is prepare → plan → discover → screen → finish. After screening, a conditional edge returns to planning if fewer matches qualify and the round budget remains. Original requirements are retained verbatim during replanning.
+The location recognizer uses an offline place-name dataset and conservative header rules. It stops at work-history/education sections, prioritizes a location label, and avoids treating names or a prose mention as residence. Explicit geographic preferences override it; “anywhere” suppresses the default. “Remote” alone does not erase the need to establish an eligible hiring location. Unknown remains unknown. This is a heuristic, not a geocoder or a work-authorization decision.
 
-## Replaceability
+## Parallel research graph
 
-Business rules depend on SearchProvider, ExtractProvider, and Reasoner protocols. LangGraph is isolated in its runner. Composition wires the adapters; settings own keys and limits. The UI consumes domain events and job records, not provider SDK objects.
+```mermaid
+flowchart TD
+  START[Prepare parsed résumé and location] --> JOBS
+  START --> PROFILE[Research applicant public work, optional]
+  subgraph JOBS[Job-search subgraph]
+    P[Plan] --> D[Discover and stream candidates]
+    D --> S[Extract and assess individual openings]
+    S -->|Need more and rounds remain| P
+    S --> F[Finish job shortlist]
+  end
+  PROFILE --> EX[Capture source and attribution quotes]
+  F --> JOIN[Persist shortlist and applicant findings]
+  EX --> JOIN
+  JOIN --> PICK[User chooses one role]
+  PICK --> T[Separate LangGraph operation: Nimble follow-up]
+  T --> V[Validate fact IDs and job quotes]
+  V --> STREAM[Stream per-role résumé proposals]
+  STREAM --> END[Persist final result]
+```
 
-The live adapters are `NimbleSearch`, `NimbleExtract`, and `NimbleAgent`, each in its own file and sharing one `NimbleClient` transport. `ResearchResult` carries structured content separately from the provider's trust report and run IDs. Query planning is deterministic local code. Hosted Agent runs investigate individual openings, using a named prompt and task-specific schema.
+The entire job-search subgraph is one parent branch. Putting a long applicant node beside only the first planning node would make LangGraph’s superstep barrier delay discovery. The nested graph prevents that: a regression test synchronizes both branches and proves discovery runs before applicant research completes.
 
-| Replace | Boundary | Files to change |
+Applicant research runs once per search when the user supplies professional identity URLs. These are starting points, not a domain allowlist. Nimble can investigate linked projects, contributions, talks, articles, and corroborating professional sources. It is instructed to resolve identity and personal contribution, exclude private-life/sensitive-attribute research, and distinguish individual work from team achievements.
+
+Returned facts require a public HTTPS source, a source quote, an attribution quote, and the provider’s explicit identity decision. Nimble Extract recaptures each cited page; both quotations must appear in that page. Unreadable sources or invented quotations do not become résumé evidence. Matching a quote does not prove the attribution is correct, so the applicant still confirms it.
+
+Job research is independent and streams first. The join saves both results. Only a user request to `POST /api/searches/{id}/tailor` delegates a role-specific connection task to Nimble for the selected match/review role, using the role, captured job passages, original résumé context, and source-checked public facts. Output references local job IDs and fact IDs. A proposed addition must have a valid fact and an exact captured job quote. Remaining gaps stay explicit. Proposals do not automatically change match status. The follow-up uses the applicant agent’s `previous_interaction_id` when returned by Nimble, keeping context scoped to this applicant. A completed proposal is reused on repeated requests; it is not regenerated automatically.
+
+`POST /api/searches/{id}/resume-draft` accepts selected proposal indexes for one role and returns the original parsed résumé plus those additions as Markdown. It cannot accept arbitrary model text or unknown proposal indexes. The UI requires an attribution/wording confirmation for each addition. Neither the original file nor stored résumé text is overwritten.
+
+## Discovery and decisions
+
+The local planner keeps a role prominent rather than stacking every skill into one query. It searches employer ATS pages first, then broadens discovery in a second round without relaxing requirements. A résumé-derived location becomes “work in or remotely from…”; an explicit location preference takes precedence.
+
+A Search result is only a candidate. It emits `candidate_discovered` immediately, before Extract or Agent assessment. Known directory shapes and captured career-index headings are followed through relevant individual employer/ATS links; those links come from captured Markdown, never invented URLs. Recursive depth and total follow-up fan-out are bounded to prevent loops and duplicate paid work. The directory itself never qualifies as an opening.
+
+Each opening is extracted and investigated by Nimble. Local validation requires a specific opening, an employer/ATS host, usable listing identity, grounded résumé/listing strengths, and evidence for requested constraints. Conflicts exclude. Missing region, availability, or other required evidence sends a role to Needs review. With public-work research enabled, otherwise valid openings lacking résumé evidence can remain in review for the additional research; no unsupported claim is promoted to a confirmed match.
+
+Source HTTP errors are reported explicitly. Retrieval/research failures are presented as Unverified, not lack of professional fit. Existing persisted `provider_error` exclusions receive the same presentation without rewriting their original traces. A completed run containing these failures is labelled “some pages unverified.”
+
+The passage selector scans at most 120,000 characters and retains bounded verbatim slices and offsets. Input packing fits the provider’s 10,000-character constraint without cutting serialized JSON. The planner, selector, host checks, and exact-text checks are application policy; model interpretations and provider confidence remain separately inspectable.
+
+## Replaceable components
+
+| Component | Boundary | Wiring |
 | --- | --- | --- |
-| A search, extraction, or research provider | Python protocols in `core/ports.py` | Add an adapter; select it in `composition.py`. |
-| LangGraph | Runner port with `run(workflow, state)` | Replace `runners/langgraph.py` through composition; reuse workflow methods. |
-| CopilotKit | `SearchSession` with run, events, connection, error, reconnect | Select `SseConnection` in `ui/composition.tsx`, or implement another adapter. |
-| HTTP data access | `SearchRepository` | Replace `ui/adapters/httpRepository.ts`; components keep the same records. |
-| Next.js hosting | React views + local API contracts | Replace `app/`, `server/`, and Workspace's URL navigation; keep trace/result components and the Python service. |
+| PDF parser | `ResumeParser.parse(filename, bytes)` | `composition.ingest_resume`; standalone LlamaParse and local adapters |
+| Search / page capture / reasoning | `SearchProvider`, `ExtractProvider`, `Reasoner` | Separate adapters selected in `composition.build_services` |
+| Research runtime | `WorkflowRunner.run(workflow, state)` | LangGraph owns graphs; workflow methods own domain decisions |
+| Browser data access | `SearchRepository` | HTTP adapter; views consume typed records |
+| Event delivery | `SearchSession` | CopilotKit/AG-UI by default; native SSE alternative |
+| Access / hosting | Server access adapter and backend URL | React components and Python API remain independent |
 
-`NEXT_PUBLIC_TRACE_TRANSPORT=sse` selects the included native adapter at startup/build time. Both adapters use the same result records, event reducer, and components. Removing CopilotKit's packages entirely also requires removing its imports and runtime route; it is a confined integration, not a dependency-free toggle. The UI has no Nimble key and performs no provider calls. Backend deployment configuration lives in `server/backend.ts`; Python settings are in `core/settings.py`.
+All three Nimble APIs share one HTTP client. Agent creation is never automatically retried. High effort is the configured default for structured research; polling and public progress are separate from result retrieval. No hidden reasoning is requested or fabricated. The LlamaParse integration uses HTTPX and the official v2 REST contract, not a vector store or an additional LLM runtime.
 
-Next.js is used rather than a browser-only build because the CopilotKit runtime needs a server route. No extra LLM service runs in that route. The LangGraph workflow is deterministic orchestration around the existing Nimble research tasks, not a second agent making competing decisions.
+## Events and UI
 
-## Evidence and decision rules
+Upload can return an SSE response containing actual `parse`/`profile` node spans and LlamaParse job status. The same events are stored as ingestion provenance. A subsequent search emits `saved_ingestion`, explicitly labelled reused, instead of claiming another parse call occurred.
 
-A candidate must be an individual opening on an employer domain or recognized employer ATS. The model identifies the employer website; domain checks reject aggregators and mismatched hosts. This is evidence-based classification, not independent certification of domain ownership.
+Actual LangGraph node invocation boundaries emit `node_started`, `node_completed`, and `node_failed` with span IDs, parent IDs, timestamps, durations, and allowlisted state summaries. This is application instrumentation around executed graph nodes, not a LangSmith account or a reconstruction of hidden reasoning.
 
-Application availability needs an exact quote. Every explicit requirement is met, conflicting, or unknown. Missing checks and unverified quotes become unknown. Conflicts are excluded. At least one professional strength must have an exact résumé quote and exact listing quote. Protected or sensitive traits must not be used for matching.
+Every persisted event has type, stage, timestamp, safe inputs/outputs, and a local candidate identity where applicable. Job and applicant branches can emit concurrently. SQLite sequence numbers establish replay order; the browser deduplicates by sequence.
 
-Matching is still model-based and can misinterpret text. Word matching does not prove entailment, current availability, or suitability. The UI exposes evidence and gaps for review. Unknown jobs are separate from qualifying matches.
+| Event | Presentation |
+| --- | --- |
+| `node_started`, `node_completed`, `node_failed` | Actual graph/node, parent span, status, timing, safe input/output summaries |
+| `plan_ready` | Actual queries, requirements, and selected location |
+| `candidate_discovered` | A Checking card with an unverified source title/URL |
+| `tool_started`, `provider_*` | Recorded call status and provider public progress |
+| `job_matched`, `job_unknown` | Replace candidate with an evidence-backed role card |
+| `job_excluded` | Genuine exclusion, or Unverified for a provider failure |
+| `profile_research_completed` | Source-checked public-work findings and research provenance |
+| `resume_proposals_ready` | Role-specific suggestions in the evidence drawer |
+| `run_stopped`, `run_failed`, `search_completed` | Terminal state with received results retained |
 
-Extraction retains the retrieved Markdown rather than a fixed leading excerpt. The selector scans at most 120,000 characters and ranks verbatim passages by query terms and job-related cues. The input builder fits selected résumé/listing passages into the Agent input budget without trimming explicit requirements. Source offsets and selected text are saved; adjacent passages are merged, while omitted gaps cannot become invented quotations. This selection is heuristic and can miss evidence.
+The AG-UI observer forwards all domain events as `proof.activity`, plus tool calls/results and run snapshots. Observing, refreshing, and reconnecting never create another search. Native SSE uses the same records and views. State is read before the final event fetch to avoid dropping the last events during completion.
 
-Provider trust is saved in full and shown separately from locally checked quotations. Research on other employer pages may clarify a gap, but it cannot upgrade a requirement without a supporting quote from the captured opening. Trust and passage selection are also retained in activity for excluded candidates. Exports preserve supporting quotes, unknown requirements, and provider research reports for included/review jobs.
+Activity is opt-in beneath the status row, with no preloaded stages. Job cards appear while research continues. Candidate sources are explicitly unverified; they do not show fake fit checks. Source failures remain actionable links. React keys preserve open evidence while other results arrive. The native dialog manages keyboard focus and Escape; focus returns to its opener.
 
-## Real-time events
+## Cancellation and persistence
 
-Events include type, stage, timestamp, tool, safe inputs, and actual output summaries. Events are emitted before and after calls; accepted/unknown/excluded records are emitted per candidate. Listing assessments run concurrently with at most two workers. IDs are assigned locally; requirement checks use fixed schema keys, so model-generated IDs cannot mix up listings. Providers may stream public progress; hidden reasoning is not requested or displayed.
+One search runs per Python server. Opening assessments run with two workers; the optional applicant branch is independent; only a selected role triggers a later tailoring operation. The requested result count and settings bound discovery fan-out and rounds. Nimble can research beyond starting sources inside each task.
 
-The stream reads a run-state snapshot before fetching its remaining events, preventing a final event from being skipped when completion races with delivery. Last-Event-ID allows reconnect without replaying old events.
+Stop signals a shared cancellation token before queued work, new calls, retries, and polling. In-flight HTTP requests must return before local stopping completes. Already-accepted remote Nimble tasks may continue. The stopped result preserves matches, review items, applicant findings, and proposals already emitted. Closing an observer does not cancel the worker.
 
-The AG-UI adapter emits `RUN_STARTED`, state snapshots, tool argument/result events, and terminal `RUN_FINISHED` or `RUN_ERROR`. Each persisted event also travels as `CUSTOM` named `proof.activity`, preserving its original ID, sequence, timestamp, and candidate identity. AG-UI `TOOL_CALL_END` closes the argument stream; only a returned result counts as provider output. Failed or unresolved calls are explicitly marked as having no output.
-
-The browser deduplicates by persisted sequence. The AG-UI observer may replay from the beginning on reconnect; this neither duplicates visible activity nor recreates searches. The native adapter uses EventSource's Last-Event-ID. An observer's connection status is separate from the persisted search status. Disconnecting or aborting an observer does not cancel a paid task.
-
-## Trace presentation
-
-1. The summary shows the current step, elapsed time, confirmed matches, review count, and connection problems. It has no guessed progress percentage.
-2. Activity spans the workspace beneath the run status. It appears only after events arrive, with no planned stages or zero-valued counters preloaded. It groups planning/search rounds and individual openings. Expansion reveals recorded retrieval and research outcomes and then the application's acceptance decision. Provider failures remain distinguishable from a valid exclusion.
-3. Evidence cards show paired quotations, unknown requirements, retained passages, and provider citations. Each card links to its opening in Activity. Raw event data and downloadable JSON preserve request identities and provenance without putting a full log on the main screen.
-
-React keys preserve an open evidence drawer when other candidates finish. The native modal contains keyboard focus, closes with Escape, and returns focus to the evidence button. The compact status row remains visible while the full activity trace opens on request. Timestamps come from recorded events; only elapsed time for an active run uses the current clock. Saved runs and fictional samples are labelled. There is no synthesized chain of thought. Provider claim explanations are shown as provider-reported context, separately from application validation.
-
-Application links are extracted deterministically from captured Markdown or HTML, independently of the research model. They must be public HTTPS URLs on the employer domain or a recognized ATS; application query parameters and fragments are preserved. Missing links fall back to the original listing, including older saved runs. `workflows/application_links.py` owns this policy; `JobCard` renders the external navigation. Fictional results never offer Apply.
-
-## Persistence and lifecycle
-
-Files and extracted résumé text are local. Removal deletes both; derived evidence and research reports in search history remain. Files and the database use owner-only permissions. The app does not log its full résumé input or credentials; output quotations and provider trust reports can contain selected résumé evidence.
-
-The server runs independently of the browser. CopilotKit uses an in-memory observer runner; SQLite owns durable history. New search clears the composer and selection; saved runs open only through History or an explicit run URL.
-
-## Stopping a search
-
-`POST /api/searches/{id}/stop` moves a running search to `stopping` and signals the run's `CancellationToken`. The workflow checks before queued calls and the shared transport checks before requests and after responses. Retry and polling waits are interruptible. Already-sent synchronous HTTP requests must return; the UI stays in `stopping` while this happens.
-
-The worker then records `run_stopped`, persists a partial result assembled from received events, and marks the run `stopped`. A shared lock serializes completion and stop requests; repeated stops preserve terminal state. Both SSE and AG-UI emit state changes without turning an observer disconnect into cancellation. The UI keeps confirmed and review results separate. Remote Nimble tasks may continue, and the UI says so.
+Uploaded files, parsed metadata, SQLite, events, and derived evidence persist locally with owner-only file permissions. Removing a résumé deletes its file, text, and parse metadata, while earlier searches keep selected quotations. No credentials or full résumé inputs are emitted into traces. Full PDF bytes are transmitted to LlamaParse when configured; selected professional résumé context and supplied professional links go to Nimble.
 
 ## Hosted workspace
 
-`server/access.ts` is a replaceable access adapter for one shared workspace. A sign-in page creates an eight-hour signed, Secure, HttpOnly cookie. Both `proxy.ts` and the API routes enforce the session in hosted mode; HTTP Basic remains available for API clients. Signing out clears the cookie, and rotating the workspace password invalidates existing sessions. Render terminates HTTPS. The configured external origin is authoritative; forwarded host headers cannot enable the loopback bypass. Missing or weak hosted credentials fail closed. API bodies are bounded before being passed downstream. This is not per-user tenancy: anyone with the password shares all data and provider access.
+Hosted mode is one password-protected shared workspace, not per-user tenancy. An eight-hour signed Secure/HttpOnly session and optional HTTP Basic protect pages and API routes. The configured external origin is authoritative; missing or weak hosted credentials fail closed. API bodies are bounded before proxying.
 
-The Docker image packages standalone Next.js and Python. `scripts/serve_hosted.py` binds Next.js to `0.0.0.0:$PORT`, leaves Python on loopback, forwards shutdown signals, and terminates both if either exits. `/api/health` checks the Python service and a SQLite read. `render.yaml` defines one paid service and a persistent disk mounted at `/var/data`.
+The Docker image contains standalone Next.js and Python. The hosted launcher binds the UI to Render’s `PORT`, leaves Python on loopback, forwards shutdown signals, and exits if either child exits. `/api/health` checks the Python service and SQLite. `render.yaml` describes one paid service with a persistent disk; environment secrets are supplied separately.
 
-Workflow execution is not checkpointed across restarts. Running or stopping searches become interrupted when storage is reopened. Disk-backed deploys have brief downtime; automatic deploys are off. Separate accounts require replacing the access adapter and scoping storage by identity. Multi-instance hosting also requires an external database and task queue.
+Active searches become interrupted after a restart; the workflow is not checkpointed for automatic paid-task resumption. Automatic deploys remain off, and disk-backed deploys briefly interrupt the service. Multi-instance hosting would require an external database and work queue.

@@ -6,7 +6,7 @@ function stageFor(state, kind, round) {
   const key = kind + ':' + round;
   let stage = state.stages.find(item => item.key === key);
   if (!stage) {
-    for (const previous of state.stages) if (previous.status === 'active') previous.status = 'done';
+    for (const previous of state.stages) if (previous.status === 'active' && !['profile','tailor'].includes(previous.kind) && !['profile','tailor'].includes(kind)) previous.status = 'done';
     stage = {key, kind, round, status: 'active', calls: new Map(), found: new Set(), read: new Set(), outcomes: new Map()};
     state.stages.push(stage);
   }
@@ -32,6 +32,7 @@ export function applyActivityEvent(state, event) {
   const identity = event.seq ?? event.id;
   if (identity !== undefined && state.seen.has(identity)) return;
   if (identity !== undefined) state.seen.add(identity);
+  if(event.type==='tailoring_requested') state.terminal=null;
   if (state.terminal) return;
   const data = event.data || {}, type = event.type;
   if (type === 'run_started') return;
@@ -57,9 +58,27 @@ export function applyActivityEvent(state, event) {
   }
   if (event.step === 'resume') {
     const stage = stageFor(state, 'resume', 0);
-    const call = callFor(stage, 'resume', 'Read résumé', 'Local parser');
+    const call = callFor(stage, 'resume', 'Read résumé', data.tool || 'Stored résumé');
     if (type === 'step_completed') { call.status = 'done'; call.output = {characters: data.characters}; stage.status = 'done'; }
     remember(call, event); return;
+  }
+  if (['profile','tailor'].includes(event.step)) {
+    const stage=stageFor(state,event.step,0);
+    const key=data.candidate_id || data.url || 'applicant';
+    const call=callFor(stage,key,event.step === 'profile' ? data.url || 'Public professional work' : data.url || 'Role-specific résumé suggestions',data.tool || 'Nimble Agent');
+    if(data.url) call.input={url:data.url};
+    if(type === 'provider_status') call.phase=data.status;
+    if(type === 'provider_progress') call.phase=event.message;
+    if(type === 'profile_source_checked') {call.status='done';call.output.page={characters:data.characters};}
+    if(type === 'profile_research_completed') {call.status='done';call.output.research=data.public_research.research;stage.status='done';}
+    if(type === 'resume_proposals_ready') {call.status='done';call.output.research=data.proposal.research;call.output.proposal=data.proposal;}
+    if(type.endsWith('_failed')) {call.status='error';call.phase=event.message;stage.status='done';}
+    remember(call,event);return;
+  }
+  if(type === 'candidate_discovered') {state.candidates.set(data.candidate.id,data.candidate);return;}
+  if(type === 'listing_links_found') {
+    for(const candidate of data.links || []) state.candidates.set(candidate.id,candidate);
+    return;
   }
   if (event.step === 'plan' || event.step === 'search' && type !== 'round_completed') {
     const stage = stageFor(state, 'search', round);
@@ -126,7 +145,7 @@ export function applyActivityEvent(state, event) {
     call.phase = '';
     call.output.assessment = data.job ? {decision: call.verdict, title: data.job.title, company: data.job.company, fit: data.job.fit, requirements: data.job.checks} : {decision: call.verdict, reason: data.reason};
     if (type === 'job_excluded' && (data.category === 'provider_error' || /Matching failed:|Source unavailable|HTTP \d|could not be read|connection failed|Not enough readable content/i.test(data.reason || ''))) {
-      call.status = 'error'; call.phase = data.reason;
+      call.status = 'error'; call.phase = data.reason; call.verdict='Unverified';call.output.assessment.decision='Unverified';
     }
     stage.outcomes.set(key, call.verdict);
   }
@@ -146,6 +165,8 @@ export function describeStage(stage) {
   if (stage.error) return 'Couldn’t finish this step';
   if (stage.status === 'stopped') return 'Stopped before this step finished';
   if (stage.kind === 'resume') return stage.status === 'active' ? 'Reading your experience' : 'Ready for matching';
+  if (stage.kind === 'profile') return stage.status === 'active' ? 'Following public professional evidence' : 'Professional evidence for your review'+issue;
+  if (stage.kind === 'tailor') return stage.status === 'active' ? 'Connecting evidence to job requirements' : 'Résumé suggestions ready for review'+issue;
   if (stage.kind === 'search') {
     const searches = [...stage.calls.values()].filter(call => call.key !== 'plan');
     if (!searches.length) {
@@ -157,7 +178,7 @@ export function describeStage(stage) {
   }
   if (stage.kind === 'check') {
     if (stage.status === 'active') return [stage.read.size ? stage.read.size + ' pages read' : '', stage.outcomes.size ? stage.outcomes.size + ' checked' : 'Investigating openings'].filter(Boolean).join(' · ') + issue;
-    const counts = {Matched: 0, 'Needs review': 0, Excluded: 0};
+    const counts = {Matched: 0, 'Needs review': 0, Excluded: 0, Unverified:0};
     for (const verdict of stage.outcomes.values()) counts[verdict]++;
     return stage.outcomes.size ? [counts.Matched + ' matched', counts['Needs review'] ? counts['Needs review'] + ' need review' : '', counts.Excluded ? counts.Excluded + ' excluded' : ''].filter(Boolean).join(' · ') + issue : 'No new listings to check';
   }

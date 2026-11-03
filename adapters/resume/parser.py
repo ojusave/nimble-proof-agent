@@ -1,4 +1,4 @@
-"""Local résumé parsing. Original file and text stay in the local data directory."""
+"""Local file validation and TXT/DOCX/PDF fallback parsing."""
 import io
 import re
 import zipfile
@@ -8,6 +8,34 @@ from pypdf import PdfReader
 
 MAX_FILE = 3 * 1024 * 1024
 MAX_TEXT = 18000
+
+
+def validate_upload(filename, content):
+    if not content or len(content) > MAX_FILE:
+        raise ValueError('Upload a résumé smaller than 3 MB.')
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ('.pdf', '.docx', '.txt'):
+        raise ValueError('Use a PDF, DOCX, or UTF-8 TXT résumé.')
+    if suffix == '.pdf':
+        try:
+            reader = PdfReader(io.BytesIO(content))
+            if reader.is_encrypted: raise ValueError('Upload an unencrypted PDF.')
+            if not 1 <= len(reader.pages) <= 10: raise ValueError('Use a résumé of 1–10 pages.')
+        except ValueError: raise
+        except Exception: raise ValueError('Could not read this PDF. Export it again and retry.') from None
+    return suffix
+
+
+def clean_text(text):
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text).strip()
+    if len(text) < 80: raise ValueError('Not enough readable résumé text. Try a clearer file.')
+    if len(text) > MAX_TEXT: raise ValueError('Résumé text exceeds 18,000 characters. Upload a shorter version.')
+    return text
+
+
+class LocalResumeParser:
+    def parse(self, filename, content):
+        return {'text': parse_resume(filename, content), 'parser': 'local', 'pages': [], 'parse_job_id': ''}
 
 
 def parse_resume(filename: str, content: bytes) -> str:

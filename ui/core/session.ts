@@ -1,4 +1,4 @@
-import type {ActivityEvent, SearchRun} from './types';
+import type {ActivityEvent, SearchRun, Candidate, ResumeProposal} from './types';
 
 export function mergeEvent(events: ActivityEvent[], event: ActivityEvent): ActivityEvent[] {
   if (!event || typeof event.seq !== 'number' || typeof event.type !== 'string') return events;
@@ -8,18 +8,39 @@ export function mergeEvent(events: ActivityEvent[], event: ActivityEvent): Activ
 
 export function runView(run: SearchRun, events: ActivityEvent[]) {
   const matched = new Map(), review = new Map();
+  const candidates = new Map<string,Candidate>();
+  const proposals: Record<string,ResumeProposal> = {};
   const excluded = [];
+  let location = run.result?.search_location, publicResearch = run.result?.public_research;
   let demo = run.result?.mode === 'synthetic demo';
   for (const event of events) {
-    if (event.type === 'run_started') demo = !!event.data.demo;
-    if (event.type === 'job_matched') matched.set(event.data.job.id, event.data.job);
-    if (event.type === 'job_unknown') review.set(event.data.job.id, event.data.job);
-    if (event.type === 'job_excluded') excluded.push(event.data);
+    const d = event.data;
+    if (event.type === 'run_started') demo = !!d.demo;
+    if (event.type === 'plan_ready') location = d.search_location;
+    if (event.type === 'candidate_discovered') candidates.set(d.candidate.id,{...d.candidate,status:'queued'});
+    if (event.type === 'tool_started' && ['extract','match'].includes(event.step)) {
+      for (const id of d.candidate_ids || [d.candidate_id]) {
+        const item = candidates.get(id); if (item) candidates.set(id,{...item,status:event.step === 'extract' ? 'reading' : 'researching'});
+      }
+    }
+    if (event.type === 'job_matched') {matched.set(d.job.id,d.job); candidates.delete(d.job.id);}
+    if (event.type === 'job_unknown') {review.set(d.job.id,d.job); candidates.delete(d.job.id);}
+    if (event.type === 'job_excluded') {excluded.push(d); candidates.delete(d.candidate_id);}
+    if (event.type === 'profile_research_completed') publicResearch = d.public_research;
+    if (event.type === 'profile_research_failed') publicResearch = {status:'failed',facts:[]};
+    if (event.type === 'resume_proposals_ready') proposals[d.candidate_id] = d.proposal;
+  }
+  const allExcluded = run.result?.excluded ?? excluded;
+  for (const item of allExcluded.filter(item => item.category === 'provider_error')) {
+    const id = item.candidate_id || item.url;
+    candidates.set(id,{id,url:item.url,title:item.title,status:'unverified',reason:item.reason});
   }
   return {
-    jobs: run.result?.jobs ?? [...matched.values()].slice(0, run.count),
+    jobs: run.result?.jobs ?? [...matched.values()].slice(0,run.count),
     unknowns: run.result?.unknowns ?? [...review.values()],
-    excluded: run.result?.excluded ?? excluded, demo,
+    excluded: allExcluded.filter(item => item.category !== 'provider_error'), demo,
+    candidates: [...candidates.values()], location, publicResearch,
+    proposals: {...proposals,...run.result?.resume_proposals},
     lastAt: events.at(-1)?.at,
     active: run.status === 'running' || run.status === 'stopping',
   };

@@ -11,6 +11,9 @@ class NimbleExtract:
             'url': url, 'formats': ['markdown'], 'render': True,
         })
         data = response.get('data')
+        status=response.get('status_code')
+        if isinstance(status,int) and status>=400:
+            raise ProviderError('Source returned HTTP %s; this opening could not be verified.'%status)
         text = data.get('markdown') if isinstance(data, dict) else None
         if response.get('status') != 'success' or not isinstance(text, str) or not text.strip():
             raise ProviderError('This page could not be read.')
