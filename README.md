@@ -18,7 +18,6 @@
 
 <p align="center">
   <a href="#run-locally">Run locally</a> ·
-  <a href="#deploy-on-render">Deploy on Render</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#api-boundaries">API boundaries</a> ·
   <a href="#source-walkthrough">Source walkthrough</a> ·
@@ -49,14 +48,6 @@ Open [localhost:8765](http://127.0.0.1:8765/). **Try a sample** runs the complet
 To run the services separately, use `python app.py serve --port 8767` and `npx next dev --hostname 127.0.0.1 --port 8765`. If the backend port changes, set the server-only `PROOF_BACKEND_URL`. Use `PROOF_DATA_DIR` to select an isolated data directory for demos or testing.
 
 For live searches, set `NIMBLE_API_KEY` in `.env` and restart the server. Keys stay on the server. Upload a text-based PDF, DOCX, or UTF-8 TXT résumé; scanned PDFs need OCR first. Select a result count, enter preferences such as **“Python developer advocate, remote, US”**, and click **Search jobs**.
-
-## Deploy on Render
-
-The [Render template](render.yaml) uses one **paid `0.5c-512mb` web service**, a **1 GB persistent disk**, and the [Dockerfile](Dockerfile) for Node and Python. Validate it with `render blueprints validate render.yaml`, push it, then [create the Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/ojusave/nimble-proof-agent). Enter `NIMBLE_API_KEY`; Render generates `PROOF_ACCESS_PASSWORD`. Sign in using username `proof` and that password from the service's Environment settings.
-
-This is **one password-protected shared workspace**. Everyone given access can see its résumés and history and spend its Nimble quota. Use HTTPS. The Python API stays on loopback; the authenticated Next.js server binds to Render's `PORT`. `/api/health` checks both the app and SQLite without disclosing records. Missing hosted access settings fail closed.
-
-Data lives under `/var/data/proof` on the attached disk. Do not scale to multiple instances. Deploys briefly interrupt the service; active searches become interrupted after a restart and are not automatically resumed. The template disables automatic deploys so code pushes do not unexpectedly interrupt a demonstration. See [hosting and replacement boundaries](docs/design.md#hosted-workspace).
 
 ## How it works
 
