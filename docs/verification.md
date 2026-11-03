@@ -74,3 +74,11 @@ README images were recaptured from the updated local production build. The short
 A second generated-PDF upload through the production UI completed LlamaParse in 2.13 seconds and displayed parser job provenance, actual parse/profile node spans, and the inferred San Francisco location. Its screenshot is included in the README.
 
 The feature commit `954c7b6` passed all 14 desktop/mobile browser checks in [GitHub Actions](https://github.com/ojusave/nimble-proof-agent/actions/runs/41580234181) and was deployed to the existing paid Render service. Hosted checks verified authentication, preserved data, the four-match sample, exports, SSE, and CopilotKit replay without creating another search. A generated fictional PDF produced its first streamed event in 0.11 seconds; a subsequent sample search reused the saved LlamaParse job and emitted no new parser submission.
+
+## README and screenshot verification
+
+A fresh GitHub clone installed successfully using Python 3.12.15, `python -m pip install -r requirements.lock`, Node 26.13.0, and `npm ci`. Type checking, the production build, 59 Python tests, 18 Vitest tests, and 13 activity checks passed. The offline CLI returned four matches, one review item, and one exclusion.
+
+Production startup now copies static assets and starts Next.js's generated standalone server through `scripts/start_ui.mjs`. All 14 desktop/mobile browser checks passed against that entry point. This local check used isolated ports 8785/8787 because the normal 8765/8767 ports were already occupied; no live provider calls were made.
+
+The README shortlist, evidence drawer, and graph trace were compared with the deployed interface. Their fictional sample labels, result counts, and displayed evidence match; timings vary by execution. The main image now has an explicit sample-data caption. The suggestions image remains a controlled fixture, and the PDF-ingestion image records the real LlamaParse call described above.

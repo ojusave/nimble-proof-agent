@@ -11,13 +11,14 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/ojusave/nimble-proof-agent?style=flat-square" alt="MIT license" /></a>
 </p>
 
-**Upload a resume, find relevant job openings, and see the evidence behind each recommendation.** Proof searches the web, reads individual job postings, and compares their requirements with your experience. Each result includes supporting quotes, missing information, and a link to the employer's application page.
+**Upload a resume, find relevant job openings, and see the evidence behind each recommendation.** Proof searches the web, reads individual job postings, and compares their requirements with your experience. Assessed roles show supporting evidence, missing information, and a link back to the opening.
 
 You can also add your GitHub or portfolio links. Proof researches that public work alongside the job search. When you choose a role, it can suggest resume additions supported by those sources. You review the wording before downloading a separate draft.
 
 [Try it locally](#run-locally) · [How it works](#how-it-works) · [Architecture](#architecture) · [Read the code](#read-the-code)
 
 <p align="center"><img src=".github/assets/shortlist.jpg" alt="Proof's job cards showing four fictional sample matches and one result that needs review" width="960" /></p>
+<p align="center"><em>Current UI with the built-in fictional sample. These are sample jobs, not live search results. Apply links appear on real job results.</em></p>
 
 ## What you do
 
@@ -25,28 +26,28 @@ You can also add your GitHub or portfolio links. Proof researches that public wo
 2. **Add preferences if you want.** Enter a role, location, or requirements. Leave this blank to use the professional roles and location recognized in your resume. The app shows the location it uses.
 3. **Optionally add your public work.** Supply your GitHub, portfolio, or other professional links under **Include my public work**.
 4. **Start the search.** Candidate pages appear while research continues. Open a result to inspect the job requirements, the matching resume passages, and any gaps.
-5. **Choose what to do next.** Open the employer's application page, or select a role for resume suggestions. Confirm accurate additions and download a Markdown draft. Applications are submitted on the employer's site.
+5. **Choose what to do next.** **Apply** opens a captured application link, or the original job page when no separate application link was found. If public-work research produced checked evidence, select a role for resume suggestions, confirm accurate additions, and download a Markdown draft. Applications are submitted on the employer's site.
 
 For example, a resume might describe a Developer Advocate based in San Francisco with Python experience. Proof uses the role and location to plan its search. If a posting says “remote” but does not establish eligibility from that location, it remains **Needs review**. You can inspect the missing evidence yourself.
 
 ## Run locally
 
-Install **Python 3.12+** and **Node 22.12+**, then:
+These commands use a **macOS/Linux shell or WSL**. Install **Git**, **Python 3.12 or 3.13**, and **Node 22.12+** with npm. Check `python3 --version` and `node --version` first; `python3` must point to the supported Python installation, not an older system Python.
 
 ```sh
 git clone https://github.com/ojusave/nimble-proof-agent.git
 cd nimble-proof-agent
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.lock
+python -m pip install -r requirements.lock
 npm ci
 cp .env.example .env
 npm run dev
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765/). Keep the terminal running. This command starts both the web app on port **8765** and the Python API on port **8767**.
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765/) after the terminal reports that the app is ready. Keep the terminal running. This command starts both the web app on port **8765** and the Python API on port **8767**. Both ports must be free; stop an older instance before starting another.
 
-Click **Try a sample** to explore the complete interface with a fictional resume and fictional jobs. It needs no API keys and makes no paid calls.
+Click **Try a sample** to explore job cards, evidence, activity, and exports with a fictional resume and fictional jobs. It needs no API keys and makes no paid calls. It does not run live public-work research or generate new resume suggestions.
 
 For a real search, add your keys to `.env` and restart the app:
 
@@ -56,9 +57,9 @@ LLAMA_CLOUD_API_KEY=your_llamacloud_key
 ```
 
 - **Nimble is required for live research.** Its Search, Extract, and Agent APIs find and investigate openings and public work.
-- **LlamaParse is optional.** With its key configured, PDFs go through LlamaIndex's document parsing service, including OCR. Otherwise, PDFs use local text extraction. DOCX and TXT are always read locally.
+- **LlamaParse is optional.** With its key configured, PDFs go through LlamaIndex's document parsing service, including OCR. Otherwise, PDFs use local text extraction and must contain selectable text. DOCX and UTF-8 TXT are always read locally. A configured LlamaParse failure is reported to you rather than silently switching parsers.
 
-No separate model API key or CopilotKit cloud account is required. Uploads support files up to **3 MB** and PDFs up to **10 pages**. To run a production build locally, stop development, run `npm run build`, then `npm start`.
+No separate model API key or CopilotKit cloud account is required. Uploads support files up to **3 MB**, unencrypted PDFs of **1–10 pages**, and **80–18,000 characters** of extracted text. To run a production build locally, stop development, run `npm run build`, then `npm start`.
 
 <details>
 <summary>See a PDF upload and detected location</summary>
@@ -70,13 +71,13 @@ No separate model API key or CopilotKit cloud account is required. Uploads suppo
 
 **Read the resume.** The upload workflow extracts text, records which parser was used, and looks for a location in the document's header. Preferences override that location. Reusing a saved resume reuses its parsed text.
 
-**Find openings.** A local planner turns the role and location into queries. Nimble Search returns possible job pages. The app favors employer sites and recruiting platforms such as Ashby and Greenhouse. When it finds a directory, it can follow relevant links to individual openings.
+**Find openings.** A local planner turns recognized role terms and location into queries. Its role vocabulary is limited; if no role is recognized, it falls back to skill terms. Enter your intended job title in preferences to guide discovery. Nimble Search returns possible job pages. The app favors employer sites and recruiting platforms such as Ashby and Greenhouse. When it finds a directory, it can follow relevant links to individual openings.
 
 **Investigate each job.** Nimble Extract reads the listing. Nimble Agent researches the opening and returns structured findings. Proof checks whether the quoted evidence appears in the captured sources and whether the requested conditions are supported. A search result alone is not a recommendation.
 
 **Research your public work, if requested.** A second Nimble research task runs alongside the job search. Your links establish a starting identity; the agent can follow other relevant professional sources. Proof captures the cited pages and checks the returned quotations.
 
-**Connect the evidence to one role.** After the research finishes, select **Tailor resume for this role**. Nimble uses the selected job and the public-work findings to propose relevant additions. Every accepted suggestion links a job requirement to a source quote. You confirm each addition before downloading a separate `.md` file; the original document stays intact.
+**Connect the evidence to one role.** After research finishes with checked public-work facts, **Tailor resume for this role** becomes available. Nimble uses the selected job and those findings to propose relevant additions. Every accepted suggestion links a job requirement to a source quote. You confirm each addition before downloading a separate Markdown draft containing the parsed resume text and selected additions. The original PDF or DOCX is preserved separately.
 
 The result categories explain what the app established:
 
@@ -179,6 +180,7 @@ To replace a provider, implement its interface and change the wiring in `composi
 ## Verification
 
 ```sh
+source .venv/bin/activate
 python -m unittest discover -s tests -v
 npm run typecheck
 npm test
@@ -187,7 +189,14 @@ npm run build
 python app.py demo
 ```
 
-The sample needs no paid access. Browser checks run through `npm run test:ui` against an isolated local instance; CI starts its own instance automatically.
+The sample needs no paid access. For all browser checks, stop the app to free ports 8765 and 8767, then run the following from the project root after `npm run build`:
+
+```sh
+npx playwright install chromium
+CI=1 PROOF_TEST_DB=.test-data/jobs.db npm run test:ui
+```
+
+This starts and stops a production instance with isolated `.test-data` storage and runs the desktop/mobile checks. On Linux, use `npx playwright install --with-deps chromium` if browser system libraries are missing. Running plain `npm run test:ui` instead expects an already-running app and installed Google Chrome; database-backed cases are skipped unless `PROOF_TEST_DB` points to that isolated instance's `jobs.db`.
 
 Live integration checks exercised LlamaParse and Nimble Search, Extract, and Agent with fictional resume data and public sources. They included a checked job match and a selected-role follow-up. The [verification notes](docs/verification.md) separate live observations from controlled fixtures and record the test results.
 
