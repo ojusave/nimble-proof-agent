@@ -15,4 +15,5 @@ if (existsSync(new URL('public/', root))) {
 }
 process.env.HOSTNAME = '127.0.0.1';
 process.env.PORT ||= '8765';
+process.env.COPILOTKIT_TELEMETRY_DISABLED ??= 'true';
 await import(entry.href);
