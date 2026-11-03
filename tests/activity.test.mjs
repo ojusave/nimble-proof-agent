@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {createActivityState, applyActivityEvent, finishActivity, describeStage} from '../web/activity.mjs';
+import {createActivityState, applyActivityEvent, finishActivity, describeStage} from '../ui/core/activity.mjs';
 let sequence = 0;
 function emit(state, type, step, data = {}, message = type) {
   const event = {seq: ++sequence, type, step, data, message};
@@ -14,6 +14,37 @@ function seeded() {
   return state;
 }
 const checks = [
+  ['steps appear only when their events arrive, never from a final snapshot', () => {
+    const state = createActivityState();
+    finishActivity(state, 'complete', {jobs: [], requested: 5});
+    assert.equal(state.stages.length, 0);
+    const active = createActivityState();
+    emit(active, 'run_started', 'start');
+    assert.equal(active.stages.length, 0);
+    emit(active, 'step_started', 'resume');
+    assert.deepEqual(active.stages.map(stage => stage.kind), ['resume']);
+  }],
+  ['stopping does not fabricate completion and stopped is terminal', () => {
+    const state = seeded();
+    emit(state, 'tool_started', 'extract', {candidate_id: 'a', url: 'https://a.example/job'});
+    emit(state, 'run_stopping', 'finish');
+    assert.equal(state.terminal, null);
+    emit(state, 'run_stopped', 'finish', {}, 'Stopped locally.');
+    assert.equal(state.terminal, 'stopped');
+    assert.equal(state.stages.at(-1).calls.get('https://a.example/job').status, 'stopped');
+  }],
+  ['local planning is labelled correctly and provenance survives exclusion', () => {
+    const state = createActivityState();
+    emit(state, 'plan_ready', 'plan', {round: 1, tool: 'Local planner', queries: ['jobs']});
+    assert.deepEqual([...state.stages[0].calls.get('plan').tools], ['Local planner']);
+    emit(state, 'evidence_selected', 'extract', {candidate_id: 'a', url: 'https://a.example/job', evidence: {passages: [{text: 'Apply now.'}]}});
+    emit(state, 'research_completed', 'match', {candidate_id: 'a', url: 'https://a.example/job', research: {run_id: 'r', trust: {confidence: 'high'}}});
+    emit(state, 'job_excluded', 'verify', {url: 'https://a.example/job', reason: 'Conflicts with remote'});
+    const call = state.stages.at(-1).calls.get('https://a.example/job');
+    assert.equal(call.output.research.run_id, 'r');
+    assert.equal(call.output.evidence.passages[0].text, 'Apply now.');
+    assert.equal(call.verdict, 'Excluded');
+  }],
   ['heartbeats update one call without adding rows', () => {
     const state = createActivityState();
     emit(state, 'step_started', 'plan', {round: 1});

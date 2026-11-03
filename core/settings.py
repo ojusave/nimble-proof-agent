@@ -26,4 +26,5 @@ class Settings:
                 key, sep, value = line.partition('=')
                 if sep and not key.strip().startswith('#'):
                     env[key.strip()] = value.strip().strip('\"\'')
-        return cls(api_key=os.environ.get('NIMBLE_API_KEY', env.get('NIMBLE_API_KEY', '')))
+        return cls(api_key=os.environ.get('NIMBLE_API_KEY', env.get('NIMBLE_API_KEY', '')),
+                   data_dir=Path(os.environ.get('PROOF_DATA_DIR', str(ROOT/'data'))))

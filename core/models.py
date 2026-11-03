@@ -5,6 +5,15 @@ from typing import Any
 from uuid import uuid4
 
 
+@dataclass
+class ResearchResult:
+    """Keep provider evidence separate from model-authored answer fields."""
+    content: dict
+    trust: dict = field(default_factory=dict)
+    run_id: str = ''
+    agent_id: str = ''
+
+
 @dataclass(frozen=True)
 class SearchRequest:
     resume_id: str

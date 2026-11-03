@@ -1,5 +1,6 @@
 """Implement these protocols to replace APIs without changing the workflow."""
 from typing import Callable, Protocol
+from .models import ResearchResult
 
 Emit = Callable[[dict], None]
 
@@ -13,7 +14,7 @@ class ExtractProvider(Protocol):
 
 
 class Reasoner(Protocol):
-    def structured(self, task: str, schema: dict, purpose: str, emit: Emit) -> dict: ...
+    def structured(self, task: str, schema: dict, purpose: str, emit: Emit) -> ResearchResult: ...
 
 
 class WorkflowRunner(Protocol):

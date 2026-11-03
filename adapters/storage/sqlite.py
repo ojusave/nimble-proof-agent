@@ -23,7 +23,7 @@ class Repository:
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT,payload TEXT);
             CREATE INDEX IF NOT EXISTS events_run ON events(run_id,seq);
             ''')
-            db.execute("UPDATE runs SET status='interrupted',error='Server restarted. Start a new search to continue.' WHERE status='running'")
+            db.execute("UPDATE runs SET status='interrupted',error='Server restarted. Start a new search to continue.' WHERE status IN ('running','stopping')")
         os.chmod(self.path,0o600)
 
     def connect(self):
@@ -54,7 +54,7 @@ class Repository:
         with self.connect() as db:
             row=db.execute('SELECT path FROM resumes WHERE id=?',(rid,)).fetchone()
             if row is None: return False
-            if db.execute("SELECT 1 FROM runs WHERE resume_id=? AND status='running'",(rid,)).fetchone():
+            if db.execute("SELECT 1 FROM runs WHERE resume_id=? AND status IN ('running','stopping')",(rid,)).fetchone():
                 raise ValueError('Wait for the active search before removing its résumé.')
             db.execute('DELETE FROM resumes WHERE id=?',(rid,))
         path=Path(row['path'])
@@ -77,10 +77,14 @@ class Repository:
             rows=db.execute('SELECT seq,payload FROM events WHERE run_id=? AND seq>? ORDER BY seq',(rid,after)).fetchall()
         return [{'seq':r['seq'],**json.loads(r['payload'])} for r in rows]
 
-    def finish(self,rid,result=None,error=None):
+    def finish(self,rid,result=None,error=None,status=None):
         with self.connect() as db:
-            db.execute('UPDATE runs SET status=?,result=?,error=? WHERE id=?',('failed' if error else 'complete',json.dumps(result) if result else None,error,rid))
+            db.execute('UPDATE runs SET status=?,result=?,error=? WHERE id=?',(status or ('failed' if error else 'complete'),json.dumps(result) if result else None,error,rid))
         with self.changed: self.changed.notify_all()
+
+    def request_stop(self,rid):
+        with self.connect() as db:
+            db.execute("UPDATE runs SET status='stopping' WHERE id=? AND status='running'",(rid,))
 
     def run(self,rid):
         with self.connect() as db: row=db.execute('SELECT * FROM runs WHERE id=?',(rid,)).fetchone()

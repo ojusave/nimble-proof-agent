@@ -1,5 +1,6 @@
 """Clearly fictional examples, using the same workflow as live searches."""
 import json
+from core.models import ResearchResult
 
 SAMPLE_RESUME='''Jordan Example — Developer Advocate
 Eight years building developer tools and teaching technical audiences.
@@ -72,11 +73,6 @@ class DemoAdapter:
         return ' '.join([role,job['work'],location,qualifications[number-1],'Apply for this job using our application form.'])
 
     def structured(self,task,schema,purpose,emit):
-        if purpose=='plan':
-            return {'roles':['Developer Advocate','Technical Educator','Developer Experience Engineer'],
-                    'skills':['Python','JavaScript','APIs','Developer education'],
-                    'queries':['developer advocate remote US employer careers','developer educator Python remote US jobs'],
-                    'requirements':[{'id':'R1','text':'Remote within the United States'}]}
         payload=json.loads(task.split('\n',1)[1]);item=payload['candidates'][0]
         n=int(item['url'].rsplit('/',1)[-1]);job=JOBS[n-1]
         status='met' if n<=4 else 'unknown' if n==5 else 'conflict'
@@ -87,9 +83,9 @@ class DemoAdapter:
             text=requirement['text'].lower()
             is_location=any(term in text for term in ('remote','united states')) or text.strip()=='us'
             checks[requirement['id']]={'status':status if is_location else 'met','evidence':evidence if is_location else role}
-        return {'title':job['title'],'company':job['company'],'employer_url':'https://example.org',
+        return ResearchResult(content={'title':job['title'],'company':job['company'],'employer_url':'https://example.org',
                 'location':job['location'],'is_specific_opening':True,'open_status':'open',
                 'open_evidence':'Apply for this job using our application form.',
                 'relevance':'strong' if n<=2 else 'possible','summary':job['summary'],'checks':checks,
                 'strengths':[{'reason':job['reason'],'resume_quote':job['resume_quote'],'job_quote':job['work']}],
-                'gaps':[job['gap']]}
+                'gaps':[job['gap']]})

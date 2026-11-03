@@ -6,4 +6,13 @@ __pycache__/
 .venv/
 data/
 .DS_Store
+work/
+node_modules/
+.next/
+next-env.d.ts
+.npm-cache/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.test-data/
 *.log

@@ -1,14 +1,37 @@
-![LangGraph](https://img.shields.io/badge/LangGraph-workflow-1C3C3C) ![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB) ![Nimble](https://img.shields.io/badge/Nimble-Search%20%2B%20Extract%20%2B%20Agent-345840) ![SQLite](https://img.shields.io/badge/SQLite-local-003B57)
+<h1 align="center">Proof</h1>
 
-# Proof — Job Matcher
+<p align="center">
+  Turn a résumé and job preferences into a shortlist you can inspect.<br />
+  Compare the supporting quotes, review missing information, and follow the original openings.
+</p>
 
-Upload a résumé, describe the job you want, and choose how many results to find. Default: **5**.
+<p align="center">
+  <a href="https://github.com/ojusave/nimble-proof-agent/actions/workflows/test.yml"><img src="https://github.com/ojusave/nimble-proof-agent/actions/workflows/test.yml/badge.svg" alt="Tests" /></a>
+  <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB" alt="Python 3.12+" />
+  <img src="https://img.shields.io/badge/UI-React_%2B_Next.js-22342c" alt="React and Next.js" />
+  <img src="https://img.shields.io/badge/Events-CopilotKit_%2B_AG--UI-245c43" alt="CopilotKit and AG-UI" />
+  <img src="https://img.shields.io/badge/Workflow-LangGraph-1C3C3C" alt="LangGraph" />
+  <img src="https://img.shields.io/badge/API-FastAPI-009688" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Storage-SQLite-003B57" alt="SQLite" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT license" /></a>
+</p>
 
-The agent searches employer listings, reads the requirements, and checks the fit against résumé evidence. Cards appear as each listing finishes. Activity follows one timeline: résumé, search, listing checks, and ranking. Each listing updates in place; inputs, outputs, and provider updates are available on demand. Events arrive through server-sent events.
+<p align="center">
+  <a href="#run-locally">Run locally</a> ·
+  <a href="#deploy-on-render">Deploy on Render</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#api-boundaries">API boundaries</a> ·
+  <a href="#source-walkthrough">Source walkthrough</a> ·
+  <a href="#verification">Verification</a>
+</p>
 
-## Run
+<p align="center">
+  <img src=".github/assets/shortlist.jpg" alt="Proof showing four fictional sample matches and one opening needing review" width="960" />
+</p>
 
-Python 3.12+. The app, framework, parser, and database are open source. Nimble is a paid hosted API; no separate model key is required.
+## Run locally
+
+Use **Python 3.12+ and Node 22.12+**. React and Next.js render the interface, CopilotKit carries the agent events, and LangGraph runs the workflow. Live searches use the paid Nimble API; no separate model key or CopilotKit cloud account is required.
 
 ```sh
 git clone https://github.com/ojusave/nimble-proof-agent.git
@@ -17,75 +40,140 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.lock
 cp .env.example .env
+npm ci
+npm run dev
 ```
 
-Set `NIMBLE_API_KEY` in `.env`, then:
+Open [localhost:8765](http://127.0.0.1:8765/). **Try a sample** runs the complete workflow with a fictional résumé and fictional jobs, without provider API calls. Keep the terminal running: the command starts the Next.js UI on **8765** and the Python API on **8767** and stops both together. For an optimized local build, stop development, run `npm run build`, then `npm start`.
 
-```sh
-python app.py serve
-```
+To run the services separately, use `python app.py serve --port 8767` and `npx next dev --hostname 127.0.0.1 --port 8765`. If the backend port changes, set the server-only `PROOF_BACKEND_URL`. Use `PROOF_DATA_DIR` to select an isolated data directory for demos or testing.
 
-Open http://127.0.0.1:8765. **Try a sample** uses a fictional résumé and jobs with no API calls. PDF, DOCX, and UTF-8 TXT résumés are supported. Scanned PDFs need OCR first. Provider prompts use bounded résumé and listing excerpts to fit Nimble’s input limit; content beyond those excerpts may be missed.
+For live searches, set `NIMBLE_API_KEY` in `.env` and restart the server. Keys stay on the server. Upload a text-based PDF, DOCX, or UTF-8 TXT résumé; scanned PDFs need OCR first. Select a result count, enter preferences such as **“Python developer advocate, remote, US”**, and click **Search jobs**.
 
-## Workflow
+## Deploy on Render
+
+The [Render template](render.yaml) uses one **paid `0.5c-512mb` web service**, a **1 GB persistent disk**, and the [Dockerfile](Dockerfile) for Node and Python. Validate it with `render blueprints validate render.yaml`, push it, then [create the Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/ojusave/nimble-proof-agent). Enter `NIMBLE_API_KEY`; Render generates `PROOF_ACCESS_PASSWORD`. Sign in using username `proof` and that password from the service's Environment settings.
+
+This is **one password-protected shared workspace**. Everyone given access can see its résumés and history and spend its Nimble quota. Use HTTPS. The Python API stays on loopback; the authenticated Next.js server binds to Render's `PORT`. `/api/health` checks both the app and SQLite without disclosing records. Missing hosted access settings fail closed.
+
+Data lives under `/var/data/proof` on the attached disk. Do not scale to multiple instances. Deploys briefly interrupt the service; active searches become interrupted after a restart and are not automatically resumed. The template disables automatic deploys so code pushes do not unexpectedly interrupt a demonstration. See [hosting and replacement boundaries](docs/design.md#hosted-workspace).
+
+## How it works
+
+1. **Prepare and plan locally.** Parse the résumé, remove obvious email and phone strings, preserve explicit preferences, and construct discovery queries. No hosted research run is spent generating query strings.
+2. **Discover openings.** Search for employer listings, normalize URLs, reject known aggregators, and deduplicate candidates.
+3. **Capture evidence.** Extract each page, select relevant passages across a bounded scan, and retain the selected text and source offsets.
+4. **Investigate one opening.** Ask the research agent to open the exact listing, check availability, resolve ambiguities using official employer sources, and return a structured assessment plus its trust report.
+5. **Apply local decision rules.** Check quotations against captured passages. A conflict excludes a job; missing evidence sends it to **Needs review**, outside the requested match count.
+6. **Review and export.** Inspect paired résumé/listing quotes, requirement checks, provider citations, and unresolved gaps. Export includes both matches and openings needing review. If too few qualify, decide which preference to change yourself.
+
+For example, **“Remote”** without an allowed hiring region does not confirm **“US”**. The opening stays in Needs review. A provider's confidence grade cannot override a missing quotation.
+
+## Following the activity
+
+Activity sits across the workspace beneath the run status, grouped by search round and opening. Stages and counters appear only after their recorded events arrive; result tabs appear with the first result or a terminal state. Expand an opening to see retrieval and research outcomes, recorded timestamps, selected evidence, the app's decision, and the original event data. **Follow this opening** connects a result directly to its trace. Download the trace as JSON or export the shortlist as Markdown.
+
+Successful retrieval means a page was read; successful research means output was received. Neither means the opening qualifies. Matches, unknowns, exclusions, and provider errors remain separate. Sample data is labelled throughout; saved runs retain their original timestamps. The UI does not invent percentages or model reasoning.
+
+A new search starts with a blank composer and no selected résumé, trace, or result cards. History and explicit run URLs open saved searches. Refresh and reconnection read the same saved search. They do not create paid tasks again. Open evidence stays open while other results arrive. The full résumé and credentials are omitted from trace events; selected supporting quotations remain inspectable.
+
+**Stop** prevents queued work, retries, polling, and new provider calls. The UI shows **Stopping…** until in-flight HTTP requests return, then preserves results already received. Stopping locally does not confirm cancellation of Nimble tasks already accepted remotely. Closing the browser only disconnects the observer.
+
+<details>
+<summary>Inspect a sample result's supporting evidence</summary>
+<p align="center"><img src=".github/assets/evidence.jpg" alt="A fictional result with paired résumé and listing quotes, requirement checks, and captured passages" width="800" /></p>
+</details>
 
 ```mermaid
 flowchart LR
-    U[User: résumé + query + count] --> P[Prepare profile]
-    P --> Q[Plan queries]
-    Q --> S[Search employer listings]
-    S --> E[Read listing pages]
-    E --> M[Check requirements + fit]
-    M --> D{Enough matches?}
-    D -->|No, within budget| Q
-    D -->|Yes or budget reached| R[Rank shortlist]
-    M -.-> C[Stream checked job cards]
+    U[Résumé + preferences] --> P[Local planner]
+    P --> S[Nimble Search]
+    S --> E[Nimble Extract]
+    E --> C[Select captured passages]
+    C --> A[Nimble Agent: investigate opening]
+    A --> V[Local quote and requirement checks]
+    V --> R[Matches / Needs review / Excluded]
+    R --> B{Enough matches or budget reached?}
+    B -->|No| P
+    B -->|Yes| F[Rank and export]
 ```
 
-- Explicit preferences are strict. Conflicts are excluded; unknown requirements appear in a separate review list and do not count toward the requested total.
-- Only specific employer or employer-hosted ATS listings qualify. An application instruction provides evidence of availability; it is not a guarantee the employer is still accepting applicants.
-- Fit requires matching quotations from both the résumé and retrieved listing. Quotes prove provenance, not semantic correctness. If Nimble omits a résumé quote, a conservative local skill vocabulary pairs exact résumé lines with exact listing quotes, labeled “Shared skill.” Matching and requirement interpretation remain fallible model judgments.
-- Two search rounds by default. If there are fewer matches, the agent asks what to relax. It never changes requirements automatically.
-- Up to two listing assessments run concurrently. Cards appear when each assessment returns; final order is set at completion.
+## API boundaries
 
-Nimble Search discovers listings, Extract reads them, and Agent API plans searches and assesses fit. These are separate adapters behind provider-neutral interfaces.
+Each API has its own adapter. The application chooses its research scope and acceptance rules.
 
-## Replace a component
+| Question | API and source | What the app receives |
+| :--- | :--- | :--- |
+| Where might a relevant opening be? | [`search.py`](adapters/nimble/search.py) — `POST /v2/search` | Candidate URLs and titles; discovery is not validation |
+| What does this known page say? | [`extract.py`](adapters/nimble/extract.py) — `POST /v2/extract` | Retrieved Markdown; selected passages are retained with offsets |
+| What can we establish about this opening? | [`agent.py`](adapters/nimble/agent.py) — create, observe, fetch result | Structured assessment, run IDs, and `output.trust` |
 
-| Location | Responsibility |
-| --- | --- |
-| `core/ports.py`, `core/models.py` | Shared interfaces and records |
-| `workflows/job_matcher.py` | Job-specific rules; no framework or provider imports |
-| `runners/langgraph.py` | LangGraph nodes, edges, and retry-search branch |
-| `adapters/nimble/` | Nimble HTTP calls, remote status, public progress events |
-| `adapters/resume/` | Local PDF, DOCX, TXT parsing |
-| `adapters/storage/` | SQLite résumés, history, ordered events |
-| `composition.py` | Wire different Search, Extract, Reasoner, or Runner implementations |
-| `api/`, `web/` | HTTP/SSE transport and browser UI |
+[`client.py`](adapters/nimble/client.py) owns shared authentication, HTTP errors, and transport limits. [`composition.py`](composition.py) wires the three adapters to the workflow. The Agent adapter owns run creation, polling, optional public progress, and result retrieval. Creation is never retried automatically: a lost response may already have created a paid task.
 
-Use the same interfaces and event format for another assignment. New business rules belong in a new workflow. Run limits live in `core/settings.py`.
+The research task is in [`workflows/prompts.py`](workflows/prompts.py), and its output contract is in [`workflows/schemas.py`](workflows/schemas.py). Research findings from other employer pages remain context for review; they cannot silently satisfy a requirement without supporting text in the opening itself.
 
-## Data and limits
+API references: [Search](https://docs.nimbleway.com/api-reference/search/search), [Extract](https://docs.nimbleway.com/api-reference/extract/extract), [Agent lifecycle](https://docs.nimbleway.com/nimble-sdk/web-search-agents/quickstart), [trust report](https://docs.nimbleway.com/nimble-sdk/web-search-agents/trust).
 
-Résumés are saved locally until removed. Obvious email and phone strings are removed before requests; remaining résumé text and job pages are sent to Nimble. Removing a résumé deletes its original file and stored text; previous results retain selected supporting quotations.
+## Source walkthrough
 
-`data/`, `.env`, and `.venv/` are excluded from Git. The server binds to localhost, checks origins, and exposes only the allowlisted UI files. No LangSmith account, tracing service, or frontend build service is required.
+For a short code demo, open the API files above, then the named prompt, then `JobWorkflow.validate`. That shows the requests, instructions, returned evidence, and final acceptance decision in separate places.
 
-Live searches use Nimble credits. Agent creation is not retried automatically; a lost response can still have created a paid job. Provider tasks can run for minutes. The UI relays public provider progress when available and otherwise shows actual queued/running status. It never fabricates internal reasoning. Closing the browser leaves the server running; restarting the server interrupts local workflows. Automatic workflow resumption and cancellation are not implemented.
+| Responsibility | Source |
+| :--- | :--- |
+| Provider-neutral interfaces and result records | [`core/ports.py`](core/ports.py), [`core/models.py`](core/models.py) |
+| Local query planning | [`workflows/planning.py`](workflows/planning.py) |
+| Passage selection and input budget | [`workflows/evidence.py`](workflows/evidence.py), [`workflows/prompts.py`](workflows/prompts.py) |
+| Job rules and quote validation | [`workflows/job_matcher.py`](workflows/job_matcher.py) |
+| LangGraph nodes, edges, bounded second round | [`runners/langgraph.py`](runners/langgraph.py) |
+| PDF, DOCX, and TXT parsing | [`adapters/resume/parser.py`](adapters/resume/parser.py) |
+| SQLite history and ordered events | [`adapters/storage/sqlite.py`](adapters/storage/sqlite.py) |
+| HTTP operations and native event stream | [`api/app.py`](api/app.py) |
+| Read-only AG-UI bridge | [`api/agent.py`](api/agent.py), [`adapters/transport/ag_ui.py`](adapters/transport/ag_ui.py) |
+| CopilotKit server and client adapters | [`server/copilot.ts`](server/copilot.ts), [`ui/adapters/CopilotConnection.tsx`](ui/adapters/CopilotConnection.tsx) |
+| UI contracts and composition | [`ui/core/ports.ts`](ui/core/ports.ts), [`ui/composition.tsx`](ui/composition.tsx) |
+| Trace and evidence views | [`ui/components/TracePanel.tsx`](ui/components/TracePanel.tsx), [`ui/components/JobCard.tsx`](ui/components/JobCard.tsx) |
+| Exported evidence and uncertainty | [`core/exporting.py`](core/exporting.py) |
+| Wiring and limits | [`composition.py`](composition.py), [`core/settings.py`](core/settings.py) |
 
-## Tests
+Business rules import neither Nimble nor LangGraph. Another provider can implement the same ports and return `ResearchResult(content, trust, run_id, agent_id)`. Another graph runner can use the same workflow methods and events. Only the composition changes.
+
+CopilotKit is also an adapter. Result cards and trace rendering consume `SearchSession` and provider-neutral events; they do not import its SDK. Set `NEXT_PUBLIC_TRACE_TRANSPORT=sse` before starting development (or building production) to use the included native SSE adapter. The Python API and CLI work independently of Next.js. See [replaceability and event contracts](docs/design.md) for the exact boundaries.
+
+## Limits and data handling
+
+- **Evidence is inspectable, not infallible.** Exact text checks establish where a quote came from; they do not establish that the interpretation is correct. Title, employer, fit, summaries, and gaps remain model judgments. Domain checks are a heuristic, and application instructions do not guarantee an opening is still available.
+- **Selection is bounded.** The selector scans up to 120,000 characters and normally selects up to 4,800 listing characters and 3,000 résumé characters, shrinking as needed to fit the serialized prompt. It scores query terms and job-related cues, and penalizes link-heavy text. Useful information can still be missed. The UI shows selected passages and scan limits.
+- **Preferences stay explicit.** Commas, semicolons, and newlines split requirements. Missing/unsupported checks remain unknown. No preferences are relaxed automatically. With no preferences, a small professional vocabulary supplies search terms; specialized roles may need an explicit query.
+- **Research is bounded.** Two rounds by default; up to two concurrent listing assessments. The per-round candidate cap is `min(candidates_per_round, max(requested + 2, 4))`, normally seven for five requested matches. Search and Extract HTTP failures may be retried once; Agent creation is not. One run can create multiple paid tasks.
+- **Timeouts are local.** The app waits up to five minutes for an Agent run, with separate HTTP request timeouts. A remote task can continue after local waiting ends. Public progress is shown when available; internal reasoning is never requested or fabricated.
+- **Local storage persists.** Uploaded files, extracted text, history, selected evidence, and provider trust reports are saved locally. Obvious contact strings are removed before live requests; remaining professional résumé passages and preferences are sent to Nimble. Removing a résumé deletes its original and stored text; previous results retain supporting quotations and research reports.
+- **One shared workspace.** Local commands bind to loopback. Hosted mode requires a password and the configured external origin, with access checked at the page and API boundaries. The CopilotKit observer is in memory; SQLite persists history. Local stopping is implemented. Remote task cancellation, restart resumption, and separate user accounts are not implemented.
+
+`.env`, `data/`, `.venv/`, and `work/` are ignored by Git. No tracing account or frontend build service is required. Runtime telemetry is disabled by default in the Next.js configuration. Dependency limitations are recorded in the [verification notes](docs/verification.md).
+
+## Verification
 
 ```sh
 python -m unittest discover -s tests -v
-node tests/activity.test.mjs  # Node 18+, no npm dependencies
+npm run typecheck
+npm test
+node tests/activity.test.mjs
+npm run build
+python app.py demo
+# With npm run dev or npm start running in another terminal:
+npm run test:ui
 ```
 
-Tests cover the actual LangGraph flow, strict/unknown requirements, fabricated evidence, source failures, résumé formats, uploads/removal, concurrent events, SSE replay, and exports. The synthetic demo runs the same workflow with fixture adapters. Live provider checks require the local key.
+Browser checks use installed Google Chrome locally. CI installs Playwright Chromium, builds the UI, and starts both services against isolated sample data. Dependencies are locked in `package-lock.json` and `requirements.lock`.
 
-[Design](docs/design.md) · [Demo walkthrough](docs/demo.md) · [Open-source components](NOTICE.md)
+The tests cover the complete offline LangGraph workflow, API request contracts and Agent lifecycle, retained trust, late-page evidence, input budgets, fabricated quotations, strict/unknown requirements, résumé formats, uploads/removal, concurrent events, native SSE and AG-UI replay, startup, exports, browser navigation, evidence, and connection recovery without duplicate searches.
 
-The browser bundle is checked in. After editing `web/activity.mjs` or `web/search.js`, run `python scripts/build_web.py`; no npm packages are needed.
+To repeat a bounded live integration check with a **fictional résumé**, configured key, and paid API access:
 
-Run the same job workflow offline with `python app.py demo`.
+```sh
+python scripts/verify_nimble.py --live
+```
 
-[MIT license](LICENSE)
+This makes two discovery searches and inspects at most two candidates in one round. Reports are written under ignored `work/nimble-verification-*` directories; the user's stored résumés and history are untouched. A successful integration check does not guarantee that any listing is currently open or suitable. See [verification notes](docs/verification.md) for the measured result and its limits.
+
+[System design](docs/design.md) · [Demo and talk notes](docs/demo.md) · [Open-source components](NOTICE.md) · [MIT license](LICENSE)

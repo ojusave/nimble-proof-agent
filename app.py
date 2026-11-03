@@ -11,8 +11,8 @@ from workflows.job_matcher import JobWorkflow
 def main():
     parser=argparse.ArgumentParser(description='Proof — résumé-based job matching')
     sub=parser.add_subparsers(dest='command',required=True)
-    serve=sub.add_parser('serve',help='Start the local browser app')
-    serve.add_argument('--port',type=int,default=8765)
+    serve=sub.add_parser('serve',help='Start the local Python API (npm run dev starts the complete app)')
+    serve.add_argument('--port',type=int,default=8767)
     demo=sub.add_parser('demo',help='Run the synthetic workflow without API keys')
     demo.add_argument('--count',type=int,default=5)
     args=parser.parse_args()

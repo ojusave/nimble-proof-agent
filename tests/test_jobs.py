@@ -35,21 +35,22 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(result['shortfall'],1)
         self.assertEqual(result['rounds'],2)
         self.assertTrue(any('Conflicts' in r['reason'] for r in result['excluded']))
-        self.assertEqual(result['requirements'][0]['text'],'Remote within the United States')
+        self.assertEqual([r['text'] for r in result['requirements']],['Developer advocate','remote','US'])
         self.assertIsNotNone(result['next_question'])
         self.assertEqual(len([e for e in events if e['type']=='job_matched']),4)
         self.assertTrue(all(not j['provisional'] for j in result['jobs']))
 
-    def test_original_query_survives_empty_planner_requirements(self):
-        class EmptyPlan(DemoAdapter):
+    def test_planning_is_local_and_preserves_requirements_across_rounds(self):
+        class NoRemotePlanning(DemoAdapter):
             def structured(self,*args,**kwargs):
-                value=super().structured(*args,**kwargs)
-                if args[2]=='plan':value['requirements']=[]
-                return value
-        result,_=self.run_workflow(EmptyPlan())
+                assert args[2]=='match', 'Planning must not create a paid research run'
+                return super().structured(*args,**kwargs)
+        result,events=self.run_workflow(NoRemotePlanning())
         self.assertEqual(len(result['jobs']),4)
-        self.assertTrue(any(r['text']=='remote' for r in result['requirements']))
-        self.assertTrue(any(r['text']=='US' for r in result['requirements']))
+        plans=[e['data'] for e in events if e['type']=='plan_ready']
+        self.assertEqual(plans[0]['requirements'],plans[1]['requirements'])
+        self.assertNotEqual(plans[0]['queries'],plans[1]['queries'])
+        self.assertEqual(plans[0]['tool'],'Local planner')
 
     def test_stops_when_count_satisfied(self):
         result,_=self.run_workflow(count=1)
@@ -60,7 +61,7 @@ class WorkflowTests(unittest.TestCase):
         class Fabricator(DemoAdapter):
             def structured(self,*args,**kwargs):
                 value=super().structured(*args,**kwargs)
-                if 'strengths' in value:value['strengths'][0]['resume_quote']='A skill never present in this résumé'
+                value.content['strengths'][0]['resume_quote']='A skill never present in this résumé'
                 return value
         result,_=self.run_workflow(Fabricator())
         self.assertEqual(result['jobs'],[])
@@ -70,7 +71,7 @@ class WorkflowTests(unittest.TestCase):
         class MissingQuote(DemoAdapter):
             def structured(self,*args,**kwargs):
                 value=super().structured(*args,**kwargs)
-                for strength in value.get('strengths',[]): strength['resume_quote']=None
+                for strength in value.content.get('strengths',[]): strength['resume_quote']=None
                 return value
         result,_=self.run_workflow(MissingQuote())
         self.assertTrue(result['jobs'])
@@ -83,7 +84,7 @@ class WorkflowTests(unittest.TestCase):
         class MissingEvidence(DemoAdapter):
             def structured(self,*args,**kwargs):
                 value=super().structured(*args,**kwargs)
-                if 'checks' in value:value['checks']={'R1':{'status':'met','evidence':'A fabricated location'}}
+                value.content['checks']={'R1':{'status':'met','evidence':'A fabricated location'}}
                 return value
         result,_=self.run_workflow(MissingEvidence())
         self.assertEqual(result['jobs'],[])
@@ -96,6 +97,26 @@ class WorkflowTests(unittest.TestCase):
                 return super().extract(url)
         result,_=self.run_workflow(BrokenPage())
         self.assertEqual(len(result['jobs']),3)
+
+    def test_malformed_assessment_does_not_abort_other_candidates(self):
+        class Malformed(DemoAdapter):
+            def structured(self,*args,**kwargs):
+                value=super().structured(*args,**kwargs)
+                if value.content['company']=='Northstar Data':value.content['strengths']=123
+                return value
+        result,_=self.run_workflow(Malformed())
+        self.assertEqual(len(result['jobs']),3)
+        self.assertTrue(any(r['reason']=='Invalid assessment field: strengths' for r in result['excluded']))
+
+    def test_requirement_keys_cannot_be_overridden_by_model_ids(self):
+        class WrongIDs(DemoAdapter):
+            def structured(self,*args,**kwargs):
+                value=super().structured(*args,**kwargs)
+                for check in value.content['checks'].values():check['id']='R3'
+                return value
+        result,_=self.run_workflow(WrongIDs())
+        self.assertEqual(len(result['jobs']),4)
+        self.assertEqual([c['id'] for c in result['jobs'][0]['checks']],['R1','R2','R3'])
 
     def test_long_documents_fit_hosted_input_limit(self):
         class BudgetRecorder(DemoAdapter):
@@ -128,6 +149,29 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('Jordan Example',json.dumps(events))
         # Only selected, evidence-backed résumé quotations are published in result cards.
         self.assertNotIn('Eight years',json.dumps(events))
+
+    def test_provider_trust_is_retained_without_overriding_missing_evidence(self):
+        class ConfidentProvider(DemoAdapter):
+            def structured(self,*args,**kwargs):
+                value=super().structured(*args,**kwargs)
+                value.content['checks']={'R1':{'status':'met','evidence':'Invented requirement evidence'}}
+                value.trust={'confidence':0.99,'sources':[{'url':'https://example.org/policy'}]}
+                value.run_id='fixture-run';value.agent_id='fixture-agent'
+                return value
+        result,events=self.run_workflow(ConfidentProvider())
+        self.assertEqual(result['jobs'],[])
+        self.assertTrue(result['unknowns'])
+        job=result['unknowns'][0]
+        self.assertEqual(job['research']['trust']['confidence'],0.99)
+        self.assertEqual(job['research']['run_id'],'fixture-run')
+        self.assertEqual(job['checks'][0]['status'],'unknown')
+        self.assertTrue(job['evidence']['passages'])
+        self.assertTrue(any(e['type']=='research_completed' for e in events))
+        from core.exporting import shortlist_markdown
+        exported=shortlist_markdown(result)
+        self.assertIn('Needs review',exported)
+        self.assertIn('fixture-run',exported)
+        self.assertIn('https://example.org/policy',exported)
 
 
 class ResumeTests(unittest.TestCase):
@@ -195,6 +239,8 @@ class APITests(unittest.TestCase):
         self.assertIn('job_matched',stream.text)
         exported=self.client.get('/api/searches/'+search_id+'/export')
         self.assertIn('4 of 5',exported.text)
+        self.assertIn('Résumé quote:',exported.text)
+        self.assertIn('Needs review',exported.text)
         self.assertEqual(self.client.delete('/api/resumes/'+rid).status_code,200)
         self.assertEqual(self.client.get('/api/resumes').json(),[])
         self.assertEqual(list((self.root/'resumes').iterdir()),[])
