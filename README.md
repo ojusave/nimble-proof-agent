@@ -47,6 +47,8 @@ npm run dev
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765/) after the terminal reports that the app is ready. Keep the terminal running. This command starts both the web app on port **8765** and the Python API on port **8767**. Both ports must be free; stop an older instance before starting another.
 
+There is no sign-in. A private browser cookie keeps your uploads and history separate from other visitors. Use the same browser to return to them; clearing its cookies or using another device starts an empty workspace. Sharing a run URL does not grant another browser access.
+
 Click **Try a sample** to explore job cards, evidence, activity, and exports with a fictional resume and fictional jobs. It needs no API keys and makes no paid calls. It does not run live public-work research or generate new resume suggestions.
 
 For a real search, add your keys to `.env` and restart the app:
@@ -86,7 +88,7 @@ The result categories explain what the app established:
 | **Checking** | A page was found; the investigation is still running. |
 | **Matches** | Supporting quotes and the app's checks passed. Review the evidence before applying. |
 | **Needs review** | A possible opening has missing or unconfirmed evidence. |
-| **Unverified** | A source could not be read or researched successfully. |
+| **Unverified** | A source could not be read, or the returned assessment lacked usable details or evidence. This is not a finding that you are unsuitable. |
 | **Not included** | The page was a directory, a closed opening, or failed another explicit check. |
 
 <details>
@@ -170,6 +172,8 @@ The rest of the code is grouped by responsibility:
 | [`tests/`](tests/) | Python, UI, and browser checks with their test configuration. |
 
 To replace a provider, implement its interface and change the wiring in `composition.py`. The workflow rules do not import Nimble's HTTP client or LangGraph. Event delivery can also be switched from CopilotKit to native server-sent events through [`ui/composition.tsx`](ui/composition.tsx).
+
+The small [research acceptance examples](tests/test_research_contracts.py) cover a supported match, missing evidence, a conflict, an unreadable assessment, and closed or directory pages. They test decision rules with controlled inputs; they do not measure live search accuracy.
 
 ## Before using real data
 

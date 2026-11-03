@@ -1,6 +1,10 @@
 # Demo and talk notes
 
+Working title: **When Is a Research Agent Actually Done?**
+
 The talk's question is **how much research an application should own and how much it should delegate**. Proof is a small case study that makes the boundaries visible. The audience should leave able to choose a discovery call, a page read, or a research task—and explain what they still need to validate themselves.
+
+The three takeaways are an API-choice table, a result contract that preserves uncertainty, and a small set of acceptance tests. Streaming and framework traces help the audience inspect those decisions.
 
 ## A short demo, not the whole talk
 
@@ -30,6 +34,22 @@ Keep these tabs ready, in this order:
 | [`ui/core/ports.ts`](../ui/core/ports.ts), [`ui/composition.tsx`](../ui/composition.tsx) | The same trace view works through CopilotKit/AG-UI or native SSE. |
 
 Avoid opening `.env`, real uploaded résumés, or private search history on stage. Use the fictional résumé with live employer data for a reproducible integration example.
+
+## Known-answer examples
+
+Run `python -m unittest discover -s tests -p test_research_contracts.py -v` before the talk. These are controlled acceptance checks, not a live-web quality benchmark:
+
+| Returned research | Application outcome | Teaching point |
+| --- | --- | --- |
+| Role, fit quotes, and requested conditions are supported | Match | Define the evidence needed for a recommendation. |
+| A remote role has no verified region eligibility | Needs review | Missing information does not establish eligibility. |
+| The page explicitly conflicts with the requested location | Not included | Keep an evidenced negative separate from an unknown. |
+| Missing or malformed assessment; unsupported resume quotes | Unverified | Failure to verify is not a finding that the applicant is unsuitable. |
+| The agent says closed without a matching source quote | Needs review | A structured answer still needs evidence checks. |
+
+Open Activity on the same role and compare the provider response with the application's final category. Exports preserve unverified sources and exclusions separately, so the distinction survives outside the UI.
+
+The app opens without a password. Prepare the live example in the browser used for presenting: browser workspaces are private, so opening a saved run URL in a different browser does not grant access. Keep a recording of the live result available if research or connectivity is slow.
 
 ## 20-minute shape
 

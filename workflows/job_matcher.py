@@ -176,38 +176,42 @@ class JobWorkflow:
             elif decision=='unknown':
                 unknowns.append(value);self.send('job_unknown','verify','Needs confirmation: '+value['title'],job=value)
             else:
-                record={'url':item['url'],'title':item['title'],'candidate_id':item['id'],'reason':value,'category':'excluded'};excluded.append(record)
+                record={'url':item['url'],'title':item['title'],'candidate_id':item['id'],'reason':value,
+                        'category':'unverified' if decision=='unverified' else 'excluded'};excluded.append(record)
                 self.send('job_excluded','verify',value,**record)
         return matches,unknowns,excluded
 
     def validate(self,item,a,state):
-        if not isinstance(a,dict): return 'exclude','No structured assessment returned.'
+        if not isinstance(a,dict): return 'unverified','No structured assessment returned.'
         for key in ('strengths','checks','gaps'):
             if a.get(key) is not None and not isinstance(a[key],list):
-                return 'exclude','Invalid assessment field: '+key
-        if a.get('is_specific_opening') is not True: return 'exclude','Not a specific job opening.'
+                return 'unverified','Invalid assessment field: '+key
+        if a.get('is_specific_opening') is False: return 'exclude','Not a specific job opening.'
+        if a.get('is_specific_opening') is not True: return 'unverified','Could not establish an individual opening.'
         try: employer=public_url(a.get('employer_url'))
-        except ValueError: return 'exclude','Employer website could not be established.'
-        if not employer_host(item['url'],employer): return 'exclude','Could not establish an employer-hosted listing.'
-        if a.get('open_status')=='closed': return 'exclude','Listing is closed.'
+        except ValueError: return 'unverified','Employer website could not be established.'
+        if not employer_host(item['url'],employer): return 'unverified','Could not establish an employer-hosted listing.'
+        if a.get('relevance') not in ('strong','possible','weak'): return 'unverified','Professional relevance was not assessed.'
         further_research=bool(state.get('public_urls'))
         if a.get('relevance') not in ('strong','possible') and not (further_research and a.get('relevance')=='weak'):
             return 'exclude','Insufficient professional fit.'
         for key in ('title','company','location','summary'):
             if not isinstance(a.get(key),str) or (key in ('title','company') and not a[key].strip()):
-                return 'exclude','Missing listing details.'
+                return 'unverified','Missing listing details.'
         strengths=[]
         page_passages=a.get('_evidence',{}).get('passages',[{'text':item['text']}])
         resume_passages=a.get('_resume_passages',[{'text':state['profile']}])
         in_page=lambda quote:any(contains(quote,p['text']) for p in page_passages)
         in_resume=lambda quote:any(contains(quote,p['text']) for p in resume_passages)
+        if a.get('open_status')=='closed' and in_page(a.get('open_evidence')):
+            return 'exclude','Listing is closed.'
         for strength in a.get('strengths') or []:
             if isinstance(strength,dict) and isinstance(strength.get('reason'),str) and in_resume(strength.get('resume_quote')) and in_page(strength.get('job_quote')):
                 strengths.append(strength)
             elif isinstance(strength,dict) and not strength.get('resume_quote') and in_page(strength.get('job_quote')):
                 paired=shared_skill_evidence(strength['job_quote'],'\n'.join(p['text'] for p in resume_passages))
                 if paired and paired not in strengths: strengths.append(paired)
-        if not strengths and not further_research: return 'exclude','No résumé-to-listing evidence could be checked.'
+        if not strengths and not further_research: return 'unverified','No résumé-to-listing evidence could be checked.'
         supplied={c.get('id'):c for c in (a.get('checks') or []) if isinstance(c,dict)}
         checks=[];uncertain=[]
         if not strengths or a.get('relevance')=='weak': uncertain.append('Professional fit beyond the résumé needs confirmation')
@@ -261,7 +265,7 @@ class JobWorkflow:
                 'warnings':state['warnings'],'requested':state['count'],'rounds':state['round'],'shortfall':missing,
                 'requirements':state['plan']['requirements'],
                 'search_location':state.get('search_location'),
-                'next_question':('Some pages could not be checked. Review those sources or try another search.' if any(x.get('category')=='provider_error' for x in state['excluded']) else 'Try a different role or location to broaden the search.') if missing else None,
+                'next_question':('Some pages could not be checked. Review those sources or try another search.' if any(x.get('category') in ('provider_error','unverified') for x in state['excluded']) else 'Try a different role or location to broaden the search.') if missing else None,
                 'mode':'synthetic demo' if state.get('demo') else 'live'}
         self.send('job_research_completed','finish','Job checks finished; keeping received results available',matched=len(selected))
         return {'result':result}

@@ -112,7 +112,11 @@ Uploaded files, parsed metadata, SQLite, events, and derived evidence persist lo
 
 ## Hosted workspace
 
-Hosted mode is one password-protected shared workspace, not per-user tenancy. An eight-hour signed Secure/HttpOnly session and optional HTTP Basic protect pages and API routes. The configured external origin is authoritative; missing or weak hosted credentials fail closed. API bodies are bounded before proxying.
+The app opens without sign-in or a password. Next.js assigns a random 256-bit capability in an HttpOnly, SameSite=Strict cookie, Secure on HTTPS, valid for 30 days. The server hashes it into a browser workspace ID and forwards that ID to the loopback API. Client-supplied scope headers are not forwarded. The configured external origin remains authoritative and API bodies are bounded before proxying.
+
+SQLite associates each resume with its workspace. Search history, results, events, exports, stop requests, and tailoring use the same ownership boundary. That association remains when a resume is deleted so its existing search history stays in the correct workspace. CopilotKit identifies each browser separately and forwards the same scope to the AG-UI observer.
+
+This provides browser workspaces, not accounts: losing the cookie loses browser access to that history, and run URLs alone cannot share it. Earlier shared uploads and runs remain in the local-only workspace after migration; new public visitors do not inherit them. Data is retained on disk rather than erased when a cookie expires. Anyone visiting the public app can start research using the configured provider quota; the existing single-worker concurrency and request-size limits still apply.
 
 The Docker image contains standalone Next.js and Python. The hosted launcher binds the UI to the host-provided `PORT`, leaves Python on loopback, forwards shutdown signals, and exits if either child exits. `/api/health` checks the Python service and SQLite. Run one instance with persistent storage and supply environment secrets through the hosting service.
 

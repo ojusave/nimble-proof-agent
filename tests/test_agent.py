@@ -41,7 +41,8 @@ class AgentTransportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, TestClient(create_app(Settings(data_dir=Path(directory)))) as client:
             repo = client.app.state.repository
             from core.models import SearchRequest
-            rid = repo.create(SearchRequest('fixture'))
+            resume=repo.save_resume('fixture.txt',b'Fixture resume','Fixture resume')
+            rid = repo.create(SearchRequest(resume['id']))
             repo.finish(rid, error='Nimble returned HTTP 402.')
             response = client.post('/api/agent', json={'threadId': rid, 'runId': 'watch', 'forwardedProps': {'search_id': rid}})
             self.assertIn('RUN_ERROR', response.text)

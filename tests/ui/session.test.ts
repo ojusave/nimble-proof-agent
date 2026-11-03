@@ -38,8 +38,8 @@ it('shows a discovered candidate before research and removes it when its assessm
   expect(runView(run,[discovered,reading]).candidates[0].status).toBe('reading');
   expect(runView(run,[discovered,reading,event(3,'job_unknown',{job:{id:'a'}})]).candidates).toHaveLength(0);
 });
-it('keeps retrieval errors unverified, including older saved exclusions', () => {
-  const e=event(1,'job_excluded',{candidate_id:'a',url:'https://employer.example/1',title:'Engineer',category:'provider_error',reason:'HTTP 404'});
+it.each(['provider_error','unverified'])('keeps %s separate from a rejected role', category => {
+  const e=event(1,'job_excluded',{candidate_id:'a',url:'https://employer.example/1',title:'Engineer',category,reason:'Evidence unavailable'});
   const view=runView({...run,status:'complete'},[e]);
   expect(view.excluded).toHaveLength(0);expect(view.candidates[0].status).toBe('unverified');
 });

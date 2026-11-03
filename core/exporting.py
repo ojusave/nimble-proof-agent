@@ -31,6 +31,14 @@ def shortlist_markdown(result):
             lines.append('')
     if result['warnings']:
         lines.extend(['## Provider issues', ''] + ['- ' + warning for warning in result['warnings']] + [''])
+    for label, unverified in [('Unverified sources',True),('Not included',False)]:
+        items=[item for item in result.get('excluded',[]) if
+               (item.get('category') in ('provider_error','unverified'))==unverified]
+        if items:
+            lines.extend(['## '+label,''])
+            for item in items:
+                lines.extend(['- '+item['title']+' — '+item['reason'],'  '+item['url']])
+            lines.append('')
     if result['next_question']:
         lines.append(result['next_question'])
     return '\n'.join(lines)

@@ -31,14 +31,14 @@ export function runView(run: SearchRun, events: ActivityEvent[]) {
     if (event.type === 'resume_proposals_ready') proposals[d.candidate_id] = d.proposal;
   }
   const allExcluded = run.result?.excluded ?? excluded;
-  for (const item of allExcluded.filter(item => item.category === 'provider_error')) {
+  for (const item of allExcluded.filter(item => ['provider_error','unverified'].includes(item.category || ''))) {
     const id = item.candidate_id || item.url;
     candidates.set(id,{id,url:item.url,title:item.title,status:'unverified',reason:item.reason});
   }
   return {
     jobs: run.result?.jobs ?? [...matched.values()].slice(0,run.count),
     unknowns: run.result?.unknowns ?? [...review.values()],
-    excluded: allExcluded.filter(item => item.category !== 'provider_error'), demo,
+    excluded: allExcluded.filter(item => !['provider_error','unverified'].includes(item.category || '')), demo,
     candidates: [...candidates.values()], location, publicResearch,
     proposals: {...proposals,...run.result?.resume_proposals},
     lastAt: events.at(-1)?.at,

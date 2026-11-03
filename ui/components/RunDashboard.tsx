@@ -42,7 +42,7 @@ export function RunDashboard({repository, onEdit, onStatus}: {repository: Search
     finally {stopLock.current = false;}
   }
   const activeSteps: Record<string, string> = {resume: 'Reading your résumé', plan: 'Planning the search', search: 'Finding employer openings', extract: 'Reading listing pages', match: 'Researching and checking openings', verify: 'Checking supporting evidence', profile: 'Researching your public work', tailor: 'Preparing résumé suggestions', finish: 'Building your shortlist'};
-  const title = stopping ? 'Stopping the search' : connection === 'reconnecting' ? 'Reconnecting to the search' : view.active ? activeSteps[lastMeaningful?.step || ''] || 'Starting your search' : run.status === 'complete' ? view.candidates.length ? 'Search finished · some pages unverified' : 'Search complete' : run.status === 'interrupted' ? 'Search interrupted' : 'Search stopped';
+  const title = stopping ? 'Stopping the search' : connection === 'reconnecting' ? 'Reconnecting to the search' : view.active ? activeSteps[lastMeaningful?.step || ''] || 'Starting your search' : run.status === 'complete' ? view.candidates.length ? 'Search finished · some pages unverified' : 'Search complete' : run.status === 'failed' ? 'Search failed' : run.status === 'interrupted' ? 'Search interrupted' : 'Search stopped';
   const jobs = tab === 'review' ? view.unknowns : tab === 'matches' ? view.jobs : [];
   const follow = (url: string) => {setTraceOpen(true); setFocus(previous => ({url, version: (previous?.version || 0) + 1}));};
   const keyboardTab = (event: KeyboardEvent) => {

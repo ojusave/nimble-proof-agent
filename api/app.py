@@ -3,7 +3,7 @@ import json
 import asyncio
 import threading
 import time
-from fastapi import FastAPI,UploadFile,File,HTTPException,Request,Response
+from fastapi import FastAPI,UploadFile,File,HTTPException,Request,Response,Depends
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel,Field,ConfigDict
@@ -22,6 +22,7 @@ from core.services import Services
 from core.cancellation import CancellationToken, SearchCancelled, stopped_result
 from composition import build_services,ingest_resume
 from api.agent import register_agent_routes
+from api.workspace import workspace_repository
 
 
 class SearchBody(BaseModel):
@@ -76,10 +77,10 @@ def create_app(settings=None,repository=None,provider=None,resume_parser=None):
         return {'status':'ok'}
 
     @app.get('/api/resumes')
-    def resumes(): return repository.list_resumes()
+    def resumes(repository=Depends(workspace_repository)): return repository.list_resumes()
 
     @app.post('/api/resumes',status_code=201)
-    async def upload(request:Request,file:UploadFile=File(...)):
+    async def upload(request:Request,file:UploadFile=File(...),repository=Depends(workspace_repository)):
         content=await file.read(MAX_FILE+1)
         await file.close()
         def parse_and_save(emit=None):
@@ -106,22 +107,22 @@ def create_app(settings=None,repository=None,provider=None,resume_parser=None):
         except ValueError as error: raise HTTPException(400,str(error))
 
     @app.delete('/api/resumes/{rid}')
-    def remove_resume(rid:str):
+    def remove_resume(rid:str,repository=Depends(workspace_repository)):
         try:
             if not repository.delete_resume(rid): raise HTTPException(404,'Résumé not found.')
         except ValueError as error: raise HTTPException(409,str(error))
         return {'removed':True}
 
     @app.get('/api/searches')
-    def searches(): return repository.recent()
+    def searches(repository=Depends(workspace_repository)): return repository.recent()
 
     @app.get('/api/searches/{rid}')
-    def run(rid:str):
+    def run(rid:str,repository=Depends(workspace_repository)):
         value=repository.run(rid)
         if value is None: raise HTTPException(404,'Search not found.')
         return value
 
-    def execute(rid,request,resume_text,control,public_urls,resume_metadata):
+    def execute(rid,request,resume_text,control,public_urls,resume_metadata,repository):
         def emit(item):
             with control_lock:
                 control.check()
@@ -155,7 +156,7 @@ def create_app(settings=None,repository=None,provider=None,resume_parser=None):
             slot.release()
 
     @app.post('/api/searches/{rid}/stop')
-    def stop_search(rid:str):
+    def stop_search(rid:str,repository=Depends(workspace_repository)):
         with control_lock:
             current=repository.run(rid)
             if current is None: raise HTTPException(404,'Search not found.')
@@ -168,7 +169,7 @@ def create_app(settings=None,repository=None,provider=None,resume_parser=None):
             return repository.run(rid)
 
     @app.post('/api/searches',status_code=202)
-    def start(body:SearchBody):
+    def start(body:SearchBody,repository=Depends(workspace_repository)):
         try: public_urls=list(dict.fromkeys(public_url(url) for url in body.public_urls))
         except ValueError as error: raise HTTPException(400,str(error))
         if body.demo and public_urls: raise HTTPException(400,'Public-work research is available only for live searches.')
@@ -183,7 +184,7 @@ def create_app(settings=None,repository=None,provider=None,resume_parser=None):
             control=CancellationToken()
             with control_lock: controls[rid]=control
             repository.emit(rid,event('run_started','start','Search started',requested=body.count,demo=body.demo,framework='LangGraph',public_urls=public_urls))
-            threading.Thread(target=execute,args=(rid,request,resume['text'],control,public_urls,json.loads(resume.get('metadata') or '{}')),daemon=True).start()
+            threading.Thread(target=execute,args=(rid,request,resume['text'],control,public_urls,json.loads(resume.get('metadata') or '{}'),repository),daemon=True).start()
         except Exception:
             if 'rid' in locals():
                 with control_lock: controls.pop(rid,None)
@@ -192,16 +193,16 @@ def create_app(settings=None,repository=None,provider=None,resume_parser=None):
         return {'id':rid}
 
     @app.post('/api/demo',status_code=202)
-    def demo():
+    def demo(repository=Depends(workspace_repository)):
         # Reusing the sample should not fill the résumé picker with duplicate files.
         resume=next((row for row in repository.list_resumes()
                      if repository.resume(row['id'])['text']==SAMPLE_RESUME),None)
         if resume is None:
             resume=repository.save_resume('Sample résumé.txt',SAMPLE_RESUME.encode(),SAMPLE_RESUME)
-        return start(SearchBody(resume_id=resume['id'],query='Developer advocate, remote, US',count=5,demo=True))
+        return start(SearchBody(resume_id=resume['id'],query='Developer advocate, remote, US',count=5,demo=True),repository)
 
     @app.get('/api/searches/{rid}/events')
-    def stream(rid:str,request:Request):
+    def stream(rid:str,request:Request,repository=Depends(workspace_repository)):
         if repository.run(rid) is None: raise HTTPException(404,'Search not found.')
         try: after=max(0,int(request.headers.get('last-event-id','0')))
         except ValueError: after=0
@@ -226,13 +227,13 @@ def create_app(settings=None,repository=None,provider=None,resume_parser=None):
         return StreamingResponse(packets(),media_type='text/event-stream',headers={'X-Accel-Buffering':'no'})
 
     @app.get('/api/searches/{rid}/export')
-    def export(rid:str):
+    def export(rid:str,repository=Depends(workspace_repository)):
         value=repository.run(rid)
         if value is None or not value['result']: raise HTTPException(404,'No completed shortlist.')
         return Response(shortlist_markdown(value['result']),media_type='text/markdown',headers={'Content-Disposition':'attachment; filename="job-shortlist.md"'})
 
     @app.post('/api/searches/{rid}/resume-draft')
-    def resume_draft(rid:str,body:ResumeDraftBody):
+    def resume_draft(rid:str,body:ResumeDraftBody,repository=Depends(workspace_repository)):
         run=repository.run(rid)
         if run is None: raise HTTPException(404,'Search not found.')
         resume=repository.resume(run['resume_id'])
@@ -249,7 +250,7 @@ def create_app(settings=None,repository=None,provider=None,resume_parser=None):
         return {'markdown':markdown+'\n'}
 
     @app.post('/api/searches/{rid}/tailor',status_code=202)
-    def tailor(rid:str,body:TailorBody):
+    def tailor(rid:str,body:TailorBody,repository=Depends(workspace_repository)):
         current=repository.run(rid)
         if current is None: raise HTTPException(404,'Search not found.')
         original=current.get('result') or {}

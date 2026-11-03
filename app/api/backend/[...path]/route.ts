@@ -1,6 +1,7 @@
 import { backendUrl } from '../../../../server/backend';
 import {requestAccess} from '../../../../server/access';
 import {limitedBody} from '../../../../server/body';
+import {workspaceHeader, workspaceId} from '../../../../server/workspace';
 
 export const runtime = 'nodejs';
 async function proxy(request: Request, context: {params: Promise<{path: string[]}>}) {
@@ -8,7 +9,7 @@ async function proxy(request: Request, context: {params: Promise<{path: string[]
   const {path} = await context.params;
   if (!['config', 'resumes', 'searches', 'demo'].includes(path[0]) || path.some(p => p === '..' || p.includes('/')))
     return new Response('Not found.', {status: 404});
-  const headers = new Headers();
+  const headers = new Headers({[workspaceHeader]: workspaceId(request)});
   for (const name of ['content-type', 'last-event-id','accept']) {
     const value = request.headers.get(name); if (value) headers.set(name, value);
   }

@@ -2,13 +2,13 @@
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {ArrowRight, BriefcaseBusiness, ChevronDown, Clock3, CodeXml, LoaderCircle, Plus, RefreshCw, SlidersHorizontal, LogOut} from 'lucide-react';
+import {ArrowRight, BriefcaseBusiness, ChevronDown, Clock3, CodeXml, LoaderCircle, Plus, RefreshCw, SlidersHorizontal} from 'lucide-react';
 import {repository, SearchConnection} from '../composition';
 import {SearchComposer} from '../components/SearchComposer';
 import {RunDashboard} from '../components/RunDashboard';
 import type {ActivityEvent} from '../core/types';
 
-export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
+export function Workspace() {
   const router = useRouter(), params = useSearchParams(), queryClient = useQueryClient();
   const runId = params.get('run');
   const config = useQuery({queryKey: ['config'], queryFn: repository.config});
@@ -79,7 +79,7 @@ export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
       {runId && search.isPending && <div className="loading-run" role="status"><LoaderCircle className="spin" size={20}/>Opening the saved search…</div>}
       {runId && search.error && <div className="notice error" role="alert"><p>{message(search.error)}</p><button className="text-button" onClick={newSearch}>Start a new search<ArrowRight size={14}/></button></div>}
       {search.data && runId && <SearchConnection key={runId} initialRun={search.data} repository={repository}><RunDashboard repository={repository} onEdit={edit} onStatus={updateStatus}/></SearchConnection>}
-      <footer className="workspace-footer"><a href="https://github.com/ojusave/nimble-proof-agent" target="_blank" rel="noopener noreferrer" aria-label="Source code" title="Source code"><CodeXml size={16}/></a>{canSignOut && <form action="/api/session" method="post"><input type="hidden" name="action" value="sign-out"/><button className="text-button" type="submit"><LogOut size={14}/>Sign out</button></form>}</footer>
+      <footer className="workspace-footer"><span>History is saved for this browser.</span><a href="https://github.com/ojusave/nimble-proof-agent" target="_blank" rel="noopener noreferrer" aria-label="Source code" title="Source code"><CodeXml size={16}/></a></footer>
     </main>
   </>;
 }

@@ -1,6 +1,40 @@
 import {test, expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 
+test('opens without login and keeps browser workspaces separate, including traces', async ({page, browser}) => {
+  let observedBody: Record<string, unknown> | undefined;
+  page.on('request', request => {
+    if (request.method() === 'POST' && request.url().endsWith('/api/copilotkit/agent/proof/run'))
+      observedBody = request.postDataJSON();
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', {name: 'Find your next role.'})).toBeVisible();
+  await expect(page.getByLabel('Workspace password')).toHaveCount(0);
+  await page.getByRole('button', {name: 'Try a sample'}).click();
+  await expect(page.getByRole('tab', {name: 'Matches 4', exact: true})).toBeVisible();
+  const runId = new URL(page.url()).searchParams.get('run')!;
+  const ownerResumes = await (await page.request.get('/api/backend/resumes')).json();
+  const stranger = await browser.newContext();
+  const other = await stranger.newPage();
+  try {
+    await other.goto(new URL('/',page.url()).href);
+    expect(await (await other.request.get('/api/backend/resumes')).json()).toEqual([]);
+    expect(await (await other.request.get('/api/backend/searches')).json()).toEqual([]);
+    for (const suffix of ['', '/trace', '/export', '/events'])
+      expect((await other.request.get(`/api/backend/searches/${runId}${suffix}`)).status()).toBe(404);
+    expect((await other.request.delete('/api/backend/resumes/' + ownerResumes[0].id)).status()).toBe(404);
+    if (process.env.PROOF_TEST_TRANSPORT !== 'sse') {
+      await expect.poll(() => observedBody).toBeTruthy();
+      const denied = await other.request.post('/api/copilotkit/agent/proof/run', {data: observedBody});
+      expect(denied.status()).toBe(404);
+    }
+    await other.goto(page.url());
+    await expect(other.getByRole('alert').filter({hasText: 'Search not found'})).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('tab', {name: 'Matches 4', exact: true})).toBeVisible();
+  } finally {await stranger.close();}
+});
+
 test('sample workflow, trace, evidence, export, and saved replay', async ({page}) => {
   const errors: string[] = [], agentRequests: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -155,7 +189,7 @@ test('incremental results retain open evidence and a failed run stays failed', a
     const failedId = randomUUID().replaceAll('-', '');
     db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?)').run(failedId, trace.run.created, trace.run.resume_id, 'Failure fixture', 5, 'failed', null, 'Fixture: provider could not return a result.');
     await page.goto('/?run=' + failedId);
-    await expect(page.getByRole('status').filter({hasText: 'Search stopped'})).toBeVisible();
+    await expect(page.getByRole('status').filter({hasText: 'Search failed'})).toBeVisible();
     await page.getByRole('button', {name: /^Activity/}).click();
     await expect(page.getByText('No activity was recorded for this search.', {exact: true})).toBeVisible();
     await expect(page.getByRole('alert').filter({hasText: 'Fixture: provider could not return a result.'})).toBeVisible();

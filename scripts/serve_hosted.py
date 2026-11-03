@@ -8,8 +8,6 @@ import time
 
 
 def main():
-    if len(os.environ.get('PROOF_ACCESS_PASSWORD','')) < 24:
-        sys.exit('Set PROOF_ACCESS_PASSWORD to a random secret of at least 24 characters.')
     if not (os.environ.get('PROOF_PUBLIC_URL') or os.environ.get('RENDER_EXTERNAL_URL')):
         sys.exit('Set PROOF_PUBLIC_URL to the external HTTPS origin.')
     root=Path(__file__).resolve().parent.parent

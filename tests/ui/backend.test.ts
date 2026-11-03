@@ -23,33 +23,28 @@ describe('local request boundary', () => {
 });
 
 describe('hosted workspace boundary', () => {
-  const password = 'test-only-credential-with-32-characters';
   const configure = () => {
     vi.stubEnv('RENDER', 'true');
     vi.stubEnv('RENDER_EXTERNAL_URL', 'https://proof.onrender.com');
-    vi.stubEnv('PROOF_ACCESS_PASSWORD', password);
   };
   const request = (headers: Record<string, string> = {}) => new Request('http://localhost:10000/api/backend/searches', {
     headers: {host: 'proof.onrender.com', ...headers},
   });
-  const auth = (value = password) => 'Basic ' + Buffer.from('proof:' + value).toString('base64');
-  it('requires credentials before exposing the shared workspace', () => {
+  it('opens without a password, including deployments with old credentials configured', () => {
     configure();
-    expect(requestAccess(request())?.status).toBe(401);
-    expect(requestAccess(request({authorization: auth('wrong')}))?.status).toBe(401);
-    expect(requestAccess(request({authorization: auth(), origin: 'https://proof.onrender.com'}))).toBeNull();
+    expect(requestAccess(request())).toBeNull();
+    vi.stubEnv('PROOF_ACCESS_PASSWORD', 'obsolete-configuration');
+    expect(requestAccess(request({origin: 'https://proof.onrender.com'}))).toBeNull();
   });
-  it('rejects cross-origin and forged loopback hosts even with credentials', () => {
+  it('still rejects cross-origin requests and forged loopback hosts', () => {
     configure();
-    expect(requestAccess(request({authorization: auth(), origin: 'https://attacker.example'}))?.status).toBe(403);
-    expect(requestAccess(request({authorization: auth(), host: '127.0.0.1:10000'}))?.status).toBe(403);
+    expect(requestAccess(request({origin: 'https://attacker.example'}))?.status).toBe(403);
+    expect(requestAccess(request({host: '127.0.0.1:10000'}))?.status).toBe(403);
   });
-  it('fails closed when the hosted password is missing or weak', () => {
+  it('requires the hosted public origin', () => {
     configure();
-    vi.stubEnv('PROOF_ACCESS_PASSWORD', '');
-    expect(requestAccess(request())?.status).toBe(503);
-    vi.stubEnv('PROOF_ACCESS_PASSWORD', 'short');
-    expect(requestAccess(request())?.status).toBe(503);
+    vi.stubEnv('RENDER_EXTERNAL_URL', '');
+    expect(requestAccess(request({host: 'localhost:10000'}))?.status).toBe(503);
   });
   it('rejects oversized chunked payloads without relying on content-length', async () => {
     await expect(limitedBody(new Request('http://localhost', {method: 'POST', body: '12345'}), 4)).rejects.toThrow('Request too large');

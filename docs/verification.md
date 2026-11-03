@@ -1,5 +1,17 @@
 # Verification — November 2, 2026
 
+## No-sign-in and acceptance-rule update
+
+The password gate, sign-in page, and session endpoint were removed. Random HttpOnly browser cookies now scope uploads, history, results, exports, operations, and both event transports. Earlier shared records remain in the local workspace. CopilotKit uses the same browser identity for thread ownership.
+
+The Python suite passed 69 checks, followed by a separate passing legacy-database migration check. The UI suite passed 20 checks, the activity suite passed 13, and the built production app passed 16 desktop/mobile browser checks. Browser checks included a second isolated browser attempting to read another browser's results, exports, SSE, and CopilotKit trace. Production build and TypeScript checks passed.
+
+Controlled research cases now distinguish missing or malformed evidence from supported exclusions and check closed-role claims against captured quotations. Unverified cases stay separate in the result view, activity, and Markdown export. Failed searches retain their failed status in the UI. These tests validate application rules; they are not a new live Nimble accuracy benchmark.
+
+The shortlist and evidence screenshots were refreshed from this build with the labelled fictional sample. The earlier verification record follows; its password/session description refers to the older deployment, not the current access design.
+
+## Earlier implementation verification
+
 These are local results for the provider split, evidence handling, and React/Next.js/CopilotKit migration. They are not a provider benchmark or evidence of job-market coverage.
 
 ## Automated checks

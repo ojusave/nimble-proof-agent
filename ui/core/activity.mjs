@@ -144,7 +144,7 @@ export function applyActivityEvent(state, event) {
     call.verdict = type === 'job_matched' ? 'Matched' : type === 'job_unknown' ? 'Needs review' : 'Excluded';
     call.phase = '';
     call.output.assessment = data.job ? {decision: call.verdict, title: data.job.title, company: data.job.company, fit: data.job.fit, requirements: data.job.checks} : {decision: call.verdict, reason: data.reason};
-    if (type === 'job_excluded' && (data.category === 'provider_error' || /Matching failed:|Source unavailable|HTTP \d|could not be read|connection failed|Not enough readable content/i.test(data.reason || ''))) {
+    if (type === 'job_excluded' && (['provider_error','unverified'].includes(data.category) || /Matching failed:|Source unavailable|HTTP \d|could not be read|connection failed|Not enough readable content/i.test(data.reason || ''))) {
       call.status = 'error'; call.phase = data.reason; call.verdict='Unverified';call.output.assessment.decision='Unverified';
     }
     stage.outcomes.set(key, call.verdict);

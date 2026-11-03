@@ -2,10 +2,11 @@
 import asyncio
 import json
 import time
-from fastapi import HTTPException, Request, Response
+from fastapi import HTTPException, Request, Response, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ConfigDict
 from adapters.transport.ag_ui import AgentEventBridge, encode
+from api.workspace import workspace_repository
 
 
 class ObserveInput(BaseModel):
@@ -17,7 +18,7 @@ class ObserveInput(BaseModel):
 
 def register_agent_routes(app, repository):
     @app.post('/api/agent')
-    def observe(body: ObserveInput, request: Request):
+    def observe(body: ObserveInput, request: Request, repository=Depends(workspace_repository)):
         rid = body.forwardedProps.get('search_id')
         if not isinstance(rid, str) or len(rid) != 32 or repository.run(rid) is None:
             raise HTTPException(404, 'Search not found. Start or select a search first.')
@@ -57,7 +58,7 @@ def register_agent_routes(app, repository):
         return StreamingResponse(packets(), media_type='text/event-stream', headers={'X-Accel-Buffering': 'no'})
 
     @app.get('/api/searches/{rid}/trace')
-    def trace(rid: str):
+    def trace(rid: str, repository=Depends(workspace_repository)):
         run = repository.run(rid)
         if run is None:
             raise HTTPException(404, 'Search not found.')
