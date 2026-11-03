@@ -102,20 +102,28 @@ The result categories explain what the app established:
 
 ## Architecture
 
-The browser displays results. The Python API starts work and saves it. LangGraph coordinates the steps, while provider adapters make the external API calls.
+The web app displays results and forwards requests to the Python API. FastAPI starts work and saves it. LangGraph coordinates three workflows: resume ingestion, research, and on-demand tailoring. Those workflows call replaceable provider adapters.
 
 ```mermaid
-flowchart LR
-    UI["Web app<br/>Next.js + React"] <-->|"Requests and live updates"| API["Python API<br/>FastAPI"]
-    API <-->|"Run workflows and receive events"| GRAPH["Workflow runner<br/>LangGraph"]
-    GRAPH --> NIMBLE["Web research<br/>Nimble Search, Extract, Agent"]
-    GRAPH --> PARSE["PDF parsing<br/>LlamaParse"]
-    API <--> STORE[("Saved files, results and events<br/>Local files + SQLite")]
+flowchart TB
+    UI["Next.js + React<br/>UI, API proxy and CopilotKit runtime"]
+    API["FastAPI<br/>Commands and event streams"]
+    GRAPH["LangGraph workflows<br/>Ingest · Research · Tailor"]
+    STORE[("Files + SQLite<br/>Uploads, results and events")]
+    NIMBLE["Nimble adapters<br/>Search · Extract · Agent"]
+    PARSE["Resume parser adapters<br/>LlamaParse or local parsing"]
+    UI <-->|"Requests and live updates"| API
+    API <--> GRAPH
+    API <--> STORE
+    GRAPH --> NIMBLE
+    GRAPH --> PARSE
 ```
+
+Search activity comes from saved execution events: FastAPI's AG-UI observer streams them through the Next.js CopilotKit runtime to React. PDF upload progress uses a separate server-sent event stream on the upload request. Both show events recorded while the work runs.
 
 | Component | Its job in Proof |
 | --- | --- |
-| **Next.js + React** | Upload form, job cards, evidence drawers, and review controls. |
+| **Next.js + React** | Upload form, job cards, evidence drawers, and review controls; Next.js also proxies API requests and hosts the CopilotKit runtime. |
 | **FastAPI** | Receives requests to upload, search, stop, tailor, and export. |
 | **LangGraph** | Runs resume ingestion, parallel job/public-work research, and the separate selected-role tailoring workflow. |
 | **Nimble** | Finds pages, reads sources, and performs the web research. |

@@ -1,6 +1,6 @@
 # System design
 
-Proof has three LangGraph workflows: resume ingestion, research, and selected-role tailoring. React/Next.js renders the workspace; FastAPI owns operations; SQLite owns durable files, results, and ordered events. CopilotKit observes the existing search over AG-UI. It does not start a competing agent.
+Proof has three LangGraph workflows: resume ingestion, research, and selected-role tailoring. React renders the workspace; the Next.js server proxies API requests and hosts the CopilotKit runtime; FastAPI owns operations. Original uploads live in local files; SQLite stores parsed text, metadata, results, and ordered events. CopilotKit observes the existing search over AG-UI. It does not start a competing agent.
 
 ## Ingestion
 
@@ -98,7 +98,7 @@ Every persisted event has type, stage, timestamp, safe inputs/outputs, and a loc
 | `resume_proposals_ready` | Role-specific suggestions in the evidence drawer |
 | `run_stopped`, `run_failed`, `search_completed` | Terminal state with received results retained |
 
-The AG-UI observer forwards all domain events as `proof.activity`, plus tool calls/results and run snapshots. Observing, refreshing, and reconnecting never create another search. Native SSE uses the same records and views. State is read before the final event fetch to avoid dropping the last events during completion.
+The AG-UI observer in `api/agent.py` reads persisted events and forwards them as `proof.activity`, plus tool calls/results and run snapshots. `server/copilot.ts` connects that observer to the Next.js CopilotKit runtime, and `ui/adapters/CopilotConnection.tsx` subscribes from React. Observing, refreshing, and reconnecting never create another search. Native SSE uses the same records and views. State is read before the final event fetch to avoid dropping the last events during completion. Upload parsing progress uses its own SSE response through the Next.js API proxy, before a search exists.
 
 Activity is opt-in beneath the status row, with no preloaded stages. Job cards appear while research continues. Candidate sources are explicitly unverified; they do not show fake fit checks. Source failures remain actionable links. React keys preserve open evidence while other results arrive. The native dialog manages keyboard focus and Escape; focus returns to its opener.
 
