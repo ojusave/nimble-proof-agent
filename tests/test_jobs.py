@@ -57,6 +57,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(result['jobs']),1)
         self.assertEqual(result['rounds'],1)
 
+    def test_application_link_is_retained_in_results_and_live_events(self):
+        class ApplicationPage(DemoAdapter):
+            def extract(self,url):
+                return super().extract(url)+' [Apply now]('+url+'/apply?source=listing#application)'
+        result,events=self.run_workflow(ApplicationPage(),count=1)
+        job=result['jobs'][0]
+        self.assertEqual(job['application_url'],job['url']+'/apply?source=listing#application')
+        self.assertEqual(job['application_link_source'],'listing_link')
+        matched=next(e['data']['job'] for e in events if e['type']=='job_matched' and e['data']['job']['id']==job['id'])
+        self.assertEqual(matched['application_url'],job['application_url'])
+
     def test_model_cannot_invent_resume_evidence(self):
         class Fabricator(DemoAdapter):
             def structured(self,*args,**kwargs):

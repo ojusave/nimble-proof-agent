@@ -5,6 +5,7 @@ export type Claim = {path?: string; callout?: number; confidence?: string; reaso
 export type Research = {run_id?: string; agent_id?: string; trust?: {confidence?: string | number; reasoning?: string; sources?: Citation[]; claims?: Claim[]}};
 export type Job = {
   id: string; title: string; company: string; url: string; location: string; fit: string; summary: string;
+  application_url?: string; application_link_source?: 'listing_link' | 'job_page';
   strengths: {reason: string; resume_quote: string; job_quote: string}[];
   checks: RequirementCheck[]; gaps: string[]; unknown_requirements?: string[];
   open_evidence?: string; checked_at?: string; rank?: number; provisional?: boolean; sample_listing?: string;

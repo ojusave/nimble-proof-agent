@@ -12,6 +12,9 @@ test('sample workflow, trace, evidence, export, and saved replay', async ({page}
   await expect(page.getByRole('status').filter({hasText: 'Search complete'})).toBeVisible();
   await expect(page.getByRole('tab', {name: 'Matches 4', exact: true})).toBeVisible();
   await expect(page.getByRole('tab', {name: 'Needs review 1', exact: true})).toBeVisible();
+  await expect(page.locator('.trace-panel')).toHaveCount(0);
+  await expect(page.getByRole('link', {name: /^Apply for/})).toHaveCount(0);
+  await page.getByRole('button', {name: /^Activity/}).click();
   await expect(page.getByText('Fictional sample · no API calls', {exact: true})).toBeVisible();
   await expect(page.locator('.trace-stage')).toHaveCount(6);
   if (process.env.PROOF_TEST_TRANSPORT === 'sse') {
@@ -20,6 +23,10 @@ test('sample workflow, trace, evidence, export, and saved replay', async ({page}
   } else expect(agentRequests.length).toBeGreaterThan(0);
   await page.getByRole('button', {name: 'Inspect evidence', exact: true}).first().click();
   await expect(page.getByText('Built Python integrations', {exact: true})).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', {name: 'Inspect evidence', exact: true}).first()).toBeFocused();
+  await page.getByRole('button', {name: 'Inspect evidence', exact: true}).first().click();
   await page.getByRole('button', {name: 'Follow this opening in the activity trace'}).click();
   const openCall = page.locator('.trace-call[open]').filter({hasText: 'Northstar Data'});
   await expect(openCall).toHaveCount(1);
@@ -36,6 +43,7 @@ test('sample workflow, trace, evidence, export, and saved replay', async ({page}
   expect(trace.events.some((event: {type: string}) => event.type === 'research_completed')).toBe(true);
   await page.reload();
   await expect(page.getByRole('tab', {name: 'Matches 4', exact: true})).toBeVisible();
+  await page.getByRole('button', {name: /^Activity/}).click();
   await expect(page.locator('.trace-stage')).toHaveCount(6);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);
@@ -58,6 +66,7 @@ test('trace reconnect reuses a saved search and deduplicates its events', async 
   await page.route('**/api/copilotkit/agent/proof/run', route => ++observers === 1 ? route.abort('connectionreset') : route.continue());
   await page.goto('/?run=' + sample.id);
   await expect(page.getByRole('alert').filter({hasText: 'The connection was interrupted.'})).toBeVisible();
+  await page.getByRole('button', {name: /^Activity/}).click();
   await expect(page.locator('.trace-stage')).toHaveCount(6, {timeout: 15000});
   await expect(page.getByRole('alert').filter({hasText: 'The connection was interrupted.'})).toHaveCount(0);
   expect(observers).toBeGreaterThan(1);
@@ -72,6 +81,32 @@ test('upload errors are actionable and do not create a run', async ({page}) => {
   await expect(page.getByRole('alert').filter({hasText: /résumé|resume|text/i})).toBeVisible();
   await expect(page).not.toHaveURL(/\?run=/);
   await expect(page.getByRole('button', {name: 'Try a sample'})).toBeEnabled();
+});
+
+test('Apply uses the captured application link and supports older saved roles', async ({page}) => {
+  test.skip(!process.env.PROOF_TEST_DB, 'Requires an isolated test database.');
+  const {DatabaseSync} = await import('node:sqlite');
+  const sample = await (await page.request.post('/api/backend/demo')).json();
+  await expect.poll(async () => (await (await page.request.get(`/api/backend/searches/${sample.id}`)).json()).status).toBe('complete');
+  const run = await (await page.request.get(`/api/backend/searches/${sample.id}`)).json();
+  const db = new DatabaseSync(process.env.PROOF_TEST_DB!);
+  expect(db.prepare('SELECT id FROM runs WHERE id=?').get(sample.id)).toBeTruthy();
+  const id = randomUUID().replaceAll('-', '');
+  const result = {...run.result, mode: 'live'};
+  result.jobs[0].application_url = 'https://careers.example.com/jobs/123/apply?source=listing#application';
+  result.jobs[0].application_link_source = 'listing_link';
+  delete result.jobs[1].application_url;
+  delete result.jobs[1].application_link_source;
+  try {
+    db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?)').run(id, run.created, run.resume_id, 'Application link fixture', 5, 'complete', JSON.stringify(result), null);
+    await page.goto('/?run=' + id);
+    const apply = page.getByRole('link', {name: 'Apply for ' + result.jobs[0].title + ' at ' + result.jobs[0].company, exact: true});
+    await expect(apply).toHaveAttribute('href', result.jobs[0].application_url);
+    await expect(apply).toHaveAttribute('target', '_blank');
+    await expect(apply).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(page.getByRole('link', {name: 'Apply for ' + result.jobs[1].title + ' at ' + result.jobs[1].company, exact: true})).toHaveAttribute('href', result.jobs[1].url);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {db.close();}
 });
 
 test('incremental results retain open evidence and a failed run stays failed', async ({page}) => {
@@ -98,6 +133,7 @@ test('incremental results retain open evidence and a failed run stays failed', a
     await expect(page.getByRole('tablist')).toHaveCount(0);
     const searching = trace.events.findIndex((event: {type: string; step: string}) => event.type === 'tool_started' && event.step === 'search') + 1;
     emit(trace.events.slice(0, searching));
+    await page.getByRole('button', {name: /^Activity/}).click();
     await expect(page.locator('.trace-stage')).toHaveCount(2);
     await expect(page.locator('.trace-metrics')).toHaveCount(0);
     await expect(page.locator('.job-card')).toHaveCount(0);
@@ -115,6 +151,7 @@ test('incremental results retain open evidence and a failed run stays failed', a
     db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?)').run(failedId, trace.run.created, trace.run.resume_id, 'Failure fixture', 5, 'failed', null, 'Fixture: provider could not return a result.');
     await page.goto('/?run=' + failedId);
     await expect(page.getByRole('status').filter({hasText: 'Search stopped'})).toBeVisible();
+    await page.getByRole('button', {name: /^Activity/}).click();
     await expect(page.getByText('No activity was recorded for this search.', {exact: true})).toBeVisible();
     await expect(page.getByRole('alert').filter({hasText: 'Fixture: provider could not return a result.'})).toBeVisible();
     await expect(page.getByRole('status').filter({hasText: 'Search complete'})).toHaveCount(0);

@@ -1,9 +1,10 @@
 'use client';
-import {memo, useState} from 'react';
-import {ArrowUpRight, Check, ChevronDown, FileSearch, ListTree} from 'lucide-react';
+import {memo, useRef, useState} from 'react';
+import {ArrowUpRight, Check, CircleHelp, FileSearch, ListTree, MapPin} from 'lucide-react';
 import type {Job, Citation} from '../core/types';
 import {claimLabel} from '../core/session';
 import {Badge, SourceLink, sourceHost} from './shared';
+import {DetailDrawer} from './DetailDrawer';
 
 function Citations({sources}: {sources: Citation[]}) {
   return <div className="citations">{sources.filter(Boolean).map((source, index) => <div key={index}>
@@ -14,21 +15,26 @@ function Citations({sources}: {sources: Citation[]}) {
 
 export const JobCard = memo(function JobCard({job, review, demo, onTrace}: {job: Job; review: boolean; demo: boolean; onTrace(url: string): void}) {
   const [open, setOpen] = useState(false);
+  const evidenceButton = useRef<HTMLButtonElement>(null);
+  const closeEvidence = () => {setOpen(false); requestAnimationFrame(() => evidenceButton.current?.focus());};
   const trust = job.research?.trust;
   const claims = Array.isArray(trust?.claims) ? trust.claims.filter(Boolean) : [];
+  const applicationUrl = (() => {try {const value = new URL(job.application_url || job.url); return value.protocol === 'https:' && !value.username && !value.password ? value.href : null;} catch {return null;}})();
   return <article className={'job-card' + (review ? ' needs-review' : '')} data-job-id={job.id}>
     <div className="job-heading">
       <div className={'company-mark tone-' + job.company.length % 4} aria-hidden="true">{job.company[0]}</div>
-      <div className="job-identity"><p className="company-name">{job.company}</p><h3>{job.title}</h3><p className="job-location">{job.location || 'Location not stated'}</p></div>
+      <div className="job-identity"><p className="company-name">{job.company}</p><h3>{job.title}</h3></div>
       {!review && <span className="match-mark" title="Supporting quotations checked"><Check size={16} aria-hidden="true"/><span className="sr-only">Supporting quotations checked</span></span>}
     </div>
-    <p className="job-fit">{job.strengths[0]?.reason || job.summary}</p>
-    {review && <div className="review-reason"><span className="status-dot amber"/>Needs confirmation: {(job.unknown_requirements || ['Application availability']).join(' · ')}</div>}
+    {!demo && applicationUrl && <a className="apply-button" href={applicationUrl} target="_blank" rel="noopener noreferrer" aria-label={'Apply for ' + job.title + ' at ' + job.company} title={job.application_link_source === 'listing_link' ? 'Open the application link from this listing' : 'Open the original employer job page'}>Apply<ArrowUpRight size={15}/></a>}
+    <p className="job-location"><MapPin size={14}/>{job.location || 'Location not stated'}</p>
+    <div className="requirement-chips" aria-label="Requirement checks">{job.checks.slice(0, 3).map(check => <span key={check.id} className={'requirement-chip ' + check.status} title={check.requirement + ': ' + (check.status === 'met' ? 'Quote checked' : 'Not confirmed')}>{check.status === 'met' ? <Check size={12}/> : <CircleHelp size={12}/>}<span>{check.requirement}</span></span>)}{job.checks.length > 3 && <button className="requirement-chip" onClick={() => setOpen(true)} aria-label="See all requirement checks">+{job.checks.length - 3}</button>}</div>
+    {review && <div className="review-reason"><span className="status-dot amber"/>Needs confirmation <span className="sr-only">{(job.unknown_requirements || ['Application availability']).join(' · ')}</span></div>}
     <div className="job-actions">
-      <button className="text-button" aria-expanded={open} aria-controls={'evidence-' + job.id} onClick={() => setOpen(value => !value)}><FileSearch size={15}/>{open ? 'Hide evidence' : 'Inspect evidence'}<ChevronDown size={14} className={open ? 'rotate' : ''}/></button>
+      <button ref={evidenceButton} className="text-button" aria-expanded={open} aria-controls={'evidence-' + job.id} onClick={() => setOpen(true)}><FileSearch size={15}/>Inspect evidence<ArrowUpRight size={14}/></button>
       {demo ? <Badge>Fictional listing</Badge> : <SourceLink url={job.url}>View opening</SourceLink>}
     </div>
-    {open && <div id={'evidence-' + job.id} className="job-evidence">
+    {open && <DetailDrawer id={'evidence-' + job.id} title={job.title} subtitle={job.company} onClose={closeEvidence}><div id={'evidence-' + job.id} className="job-evidence">
       <section><h4>Why it may fit</h4>{job.strengths.map((strength, index) => <div className="strength" key={index}>
         <p>{strength.reason}</p><div className="quote-pair"><div><span className="eyebrow">Your résumé</span><blockquote>{strength.resume_quote}</blockquote></div><div><span className="eyebrow">Job listing</span><blockquote>{strength.job_quote}</blockquote></div></div>
       </div>)}</section>
@@ -57,7 +63,7 @@ export const JobCard = memo(function JobCard({job, review, demo, onTrace}: {job:
         </details>}
         {!claims.length && !trust?.sources?.length && <p className="muted">The provider returned no source citations.</p>}
       </section>}
-      <button className="trace-link" onClick={() => onTrace(job.url)}><ListTree size={15}/>Follow this opening in the activity trace<ArrowUpRight size={14}/></button>
-    </div>}
+      <button className="trace-link" onClick={() => {setOpen(false); onTrace(job.url);}}><ListTree size={15}/>Follow this opening in the activity trace<ArrowUpRight size={14}/></button>
+    </div></DetailDrawer>}
   </article>;
 });

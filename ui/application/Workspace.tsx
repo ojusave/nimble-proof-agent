@@ -2,11 +2,10 @@
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {ArrowRight, Check, ChevronDown, Clock3, FileSearch, ListTree, LoaderCircle, Plus, RefreshCw} from 'lucide-react';
+import {ArrowRight, BriefcaseBusiness, ChevronDown, Clock3, CodeXml, LoaderCircle, Plus, RefreshCw, SlidersHorizontal, LogOut} from 'lucide-react';
 import {repository, SearchConnection} from '../composition';
 import {SearchComposer} from '../components/SearchComposer';
 import {RunDashboard} from '../components/RunDashboard';
-import {Badge} from '../components/shared';
 
 export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
   const router = useRouter(), params = useSearchParams(), queryClient = useQueryClient();
@@ -60,25 +59,24 @@ export function Workspace({canSignOut = false}: {canSignOut?: boolean}) {
   const loadError = config.error || resumes.error || history.error;
   return <>
     <a className="skip-link" href="#main">Skip to search</a>
-    <header className="app-header"><a className="brand" href="/" aria-label="Proof home"><span aria-hidden="true">p</span>proof<small>jobs, with evidence</small></a><nav aria-label="Workspace navigation">
+    <header className="app-header"><a className="brand" href="/" aria-label="Proof home"><span aria-hidden="true">p</span>proof</a><nav aria-label="Workspace navigation">
       <details className="history-menu"><summary><Clock3 size={15}/>History<ChevronDown size={13}/></summary><div className="history-popover"><h3>Recent searches</h3>{history.data?.length ? history.data.map(run => <button key={run.id} disabled={active} onClick={event => {event.currentTarget.closest('details')?.removeAttribute('open'); navigate(run.id);}}><span>{run.query || 'Résumé search'}</span><small>{new Date(run.created).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} · {run.status === 'complete' ? 'Completed' : run.status}</small></button>) : <p>No searches yet.</p>}</div></details>
       <button className="secondary-button" onClick={newSearch} disabled={busy}><Plus size={15}/>New search</button>
     </nav></header>
     <main id="main" className={'workspace ' + (runId ? 'has-run' : 'welcome')}>
-      <div className="intro"><p className="eyebrow">A CLEARER SHORTLIST</p><h1>{runId ? 'Find jobs that fit your résumé.' : <>Your next role.<br/>The evidence to explore it.</>}</h1>{!runId && <p className="intro-copy">Bring your experience. Find openings, check the requirements,<br className="desktop-break"/> and see exactly what supports each recommendation.</p>}</div>
+      <div className="intro">{!runId && <span className="intro-icon" aria-hidden="true"><BriefcaseBusiness size={26} strokeWidth={1.5}/></span>}<h1>{runId ? 'Your shortlist' : 'Find your next role.'}</h1></div>
       {loadError && <div className="notice error" role="alert"><p>{message(loadError)}</p><button className="text-button" onClick={refresh}><RefreshCw size={14}/>Retry connection</button></div>}
       <details className={'search-brief ' + (!runId ? 'initial' : '')} open={briefOpen} onToggle={event => setBriefOpen(event.currentTarget.open)} ref={brief}>
-        <summary><div><span className="eyebrow">SEARCH BRIEF</span><strong>{query || 'Based on your résumé'}</strong><small>{resumes.data?.find(resume => resume.id === selected)?.name || 'Saved résumé'} · {count} requested matches</small></div><span>{briefOpen ? 'Hide' : active ? 'View' : 'Edit'}<ChevronDown size={14}/></span></summary>
+        <summary><SlidersHorizontal size={16}/><div><strong>{query || 'Based on your résumé'}</strong><small>{resumes.data?.find(resume => resume.id === selected)?.name || 'Saved résumé'} · {count} matches requested</small></div><span>{briefOpen ? 'Close' : active ? 'Brief' : 'Edit'}<ChevronDown size={14}/></span></summary>
         <SearchComposer resumes={resumes.data || []} selected={selected} query={query} count={count} disabled={!ready || busy} liveReady={!!config.data?.live_ready} uploading={uploading} status={status}
           onSelect={setSelected} onQuery={setQuery} onCount={setCount} onUpload={upload} onRemove={remove} onSubmit={(event: FormEvent) => {event.preventDefault(); void start();}}/>
       </details>
       {error && <div className="notice error" role="alert">{error}</div>}
-      {!runId && <><div className="sample-row"><span>{config.data && !config.data.live_ready ? 'Live search needs a Nimble key. Explore a sample first.' : 'Just looking around?'}</span><button className="text-button" onClick={() => start(true)} disabled={!ready || busy}>{starting ? <LoaderCircle className="spin" size={15}/> : null}Try a sample<ArrowRight size={15}/></button></div>
-        <div className="welcome-guide">{[{Icon: FileSearch, title: 'Start with your experience', copy: 'Upload a résumé and add the things that matter to you.'}, {Icon: ListTree, title: 'Follow the actual work', copy: 'See which pages were read and how each opening was checked.'}, {Icon: Check, title: 'Keep uncertainty visible', copy: 'Missing evidence goes to review. Your requirements stay yours.'}].map(({Icon, title, copy}, index) => <div key={title}><span className="guide-icon"><Icon size={18}/></span><small>0{index + 1}</small><h2>{title}</h2><p>{copy}</p></div>)}</div></>}
+      {!runId && <div className="sample-row">{config.data && !config.data.live_ready && <span>Live search isn’t configured.</span>}<button className="text-button" onClick={() => start(true)} disabled={!ready || busy}>{starting ? <LoaderCircle className="spin" size={15}/> : null}Try a sample<ArrowRight size={14}/></button></div>}
       {runId && search.isPending && <div className="loading-run" role="status"><LoaderCircle className="spin" size={20}/>Opening the saved search…</div>}
       {runId && search.error && <div className="notice error" role="alert"><p>{message(search.error)}</p><button className="text-button" onClick={newSearch}>Start a new search<ArrowRight size={14}/></button></div>}
       {search.data && runId && <SearchConnection key={runId} initialRun={search.data} repository={repository}><RunDashboard repository={repository} onEdit={edit} onStatus={updateStatus}/></SearchConnection>}
-      <footer className="workspace-footer"><a href="https://github.com/ojusave/nimble-proof-agent" target="_blank" rel="noopener noreferrer">Source code ↗</a>{canSignOut && <form action="/api/session" method="post"><input type="hidden" name="action" value="sign-out"/><button className="text-button" type="submit">Sign out</button></form>}<span>Saved in this workspace. Evidence stays open to review.</span></footer>
+      <footer className="workspace-footer"><a href="https://github.com/ojusave/nimble-proof-agent" target="_blank" rel="noopener noreferrer" aria-label="Source code" title="Source code"><CodeXml size={16}/></a>{canSignOut && <form action="/api/session" method="post"><input type="hidden" name="action" value="sign-out"/><button className="text-button" type="submit"><LogOut size={14}/>Sign out</button></form>}</footer>
     </main>
   </>;
 }

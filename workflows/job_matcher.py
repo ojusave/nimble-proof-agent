@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.models import Job,event
 from core.cancellation import SearchCancelled
 from core.urls import public_url,employer_host,host,belongs,AGGREGATORS
+from workflows.application_links import application_link
 from core.text import professional_text,shared_skill_evidence
 from .schemas import assessment_schema
 from .planning import plan_search
@@ -173,6 +174,9 @@ class JobWorkflow:
         job['research']=a.get('_research',{})
         job['evidence']=a.get('_evidence',{})
         job['unknown_requirements']=uncertain
+        application=application_link(item['text'],item['url'],employer)
+        job['application_url']=application['url']
+        job['application_link_source']=application['source']
         if state.get('demo'): job['sample_listing']=item['text']
         return ('unknown' if uncertain else 'match'),job
 

@@ -71,7 +71,9 @@ The browser deduplicates by persisted sequence. The AG-UI observer may replay fr
 2. Activity spans the workspace beneath the run status. It appears only after events arrive, with no planned stages or zero-valued counters preloaded. It groups planning/search rounds and individual openings. Expansion reveals recorded retrieval and research outcomes and then the application's acceptance decision. Provider failures remain distinguishable from a valid exclusion.
 3. Evidence cards show paired quotations, unknown requirements, retained passages, and provider citations. Each card links to its opening in Activity. Raw event data and downloadable JSON preserve request identities and provenance without putting a full log on the main screen.
 
-React keys preserve an open evidence card when other candidates finish. Timestamps come from recorded events; only elapsed time for an active run uses the current clock. Saved runs and fictional samples are labelled. There is no synthesized chain of thought. Provider claim explanations are shown as provider-reported context, separately from application validation.
+React keys preserve an open evidence drawer when other candidates finish. The native modal contains keyboard focus, closes with Escape, and returns focus to the evidence button. The compact status row remains visible while the full activity trace opens on request. Timestamps come from recorded events; only elapsed time for an active run uses the current clock. Saved runs and fictional samples are labelled. There is no synthesized chain of thought. Provider claim explanations are shown as provider-reported context, separately from application validation.
+
+Application links are extracted deterministically from captured Markdown or HTML, independently of the research model. They must be public HTTPS URLs on the employer domain or a recognized ATS; application query parameters and fragments are preserved. Missing links fall back to the original listing, including older saved runs. `workflows/application_links.py` owns this policy; `JobCard` renders the external navigation. Fictional results never offer Apply.
 
 ## Persistence and lifecycle
 

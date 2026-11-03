@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <img src=".github/assets/shortlist.jpg" alt="Proof showing four fictional sample matches and one opening needing review" width="960" />
+  <img src=".github/assets/shortlist.png" alt="Proof showing four fictional sample matches and one opening needing review" width="960" />
 </p>
 
 ## Run locally
@@ -47,7 +47,7 @@ Open [localhost:8765](http://127.0.0.1:8765/). **Try a sample** runs the complet
 
 To run the services separately, use `python app.py serve --port 8767` and `npx next dev --hostname 127.0.0.1 --port 8765`. If the backend port changes, set the server-only `PROOF_BACKEND_URL`. Use `PROOF_DATA_DIR` to select an isolated data directory for demos or testing.
 
-For live searches, set `NIMBLE_API_KEY` in `.env` and restart the server. Keys stay on the server. Upload a text-based PDF, DOCX, or UTF-8 TXT résumé; scanned PDFs need OCR first. Select a result count, enter preferences such as **“Python developer advocate, remote, US”**, and click **Search jobs**.
+For live searches, set `NIMBLE_API_KEY` in `.env` and restart the server. Keys stay on the server. Upload a text-based PDF, DOCX, or UTF-8 TXT résumé; scanned PDFs need OCR first. Select a result count, enter preferences such as **“Python developer advocate, remote, US”**, and click **Find jobs**.
 
 ## How it works
 
@@ -56,13 +56,13 @@ For live searches, set `NIMBLE_API_KEY` in `.env` and restart the server. Keys s
 3. **Capture evidence.** Extract each page, select relevant passages across a bounded scan, and retain the selected text and source offsets.
 4. **Investigate one opening.** Ask the research agent to open the exact listing, check availability, resolve ambiguities using official employer sources, and return a structured assessment plus its trust report.
 5. **Apply local decision rules.** Check quotations against captured passages. A conflict excludes a job; missing evidence sends it to **Needs review**, outside the requested match count.
-6. **Review and export.** Inspect paired résumé/listing quotes, requirement checks, provider citations, and unresolved gaps. Export includes both matches and openings needing review. If too few qualify, decide which preference to change yourself.
+6. **Review and act.** Scan role cards and requirement chips, then open the evidence drawer for paired résumé/listing quotes, provider citations, and gaps. **Apply** opens a captured application link in a new tab, falling back to the original job page when none was found. Fictional samples have no Apply button. Export includes both matches and openings needing review.
 
 For example, **“Remote”** without an allowed hiring region does not confirm **“US”**. The opening stays in Needs review. A provider's confidence grade cannot override a missing quotation.
 
 ## Following the activity
 
-Activity sits across the workspace beneath the run status, grouped by search round and opening. Stages and counters appear only after their recorded events arrive; result tabs appear with the first result or a terminal state. Expand an opening to see retrieval and research outcomes, recorded timestamps, selected evidence, the app's decision, and the original event data. **Follow this opening** connects a result directly to its trace. Download the trace as JSON or export the shortlist as Markdown.
+The status row shows the current work; **Activity** opens the full trace beneath it, grouped by search round and opening. Stages and counters appear only after their recorded events arrive; result tabs appear with the first result or a terminal state. Expand an opening to see retrieval and research outcomes, recorded timestamps, selected evidence, the app's decision, and the original event data. **Follow this opening** opens its trace from the evidence drawer. Download the trace as JSON or export the shortlist as Markdown.
 
 Successful retrieval means a page was read; successful research means output was received. Neither means the opening qualifies. Matches, unknowns, exclusions, and provider errors remain separate. Sample data is labelled throughout; saved runs retain their original timestamps. The UI does not invent percentages or model reasoning.
 
@@ -72,7 +72,7 @@ A new search starts with a blank composer and no selected résumé, trace, or re
 
 <details>
 <summary>Inspect a sample result's supporting evidence</summary>
-<p align="center"><img src=".github/assets/evidence.jpg" alt="A fictional result with paired résumé and listing quotes, requirement checks, and captured passages" width="800" /></p>
+<p align="center"><img src=".github/assets/evidence.png" alt="A fictional result with paired résumé and listing quotes, requirement checks, and captured passages" width="800" /></p>
 </details>
 
 ```mermaid
@@ -115,6 +115,7 @@ For a short code demo, open the API files above, then the named prompt, then `Jo
 | Local query planning | [`workflows/planning.py`](workflows/planning.py) |
 | Passage selection and input budget | [`workflows/evidence.py`](workflows/evidence.py), [`workflows/prompts.py`](workflows/prompts.py) |
 | Job rules and quote validation | [`workflows/job_matcher.py`](workflows/job_matcher.py) |
+| Captured application links and fallback | [`workflows/application_links.py`](workflows/application_links.py) |
 | LangGraph nodes, edges, bounded second round | [`runners/langgraph.py`](runners/langgraph.py) |
 | PDF, DOCX, and TXT parsing | [`adapters/resume/parser.py`](adapters/resume/parser.py) |
 | SQLite history and ordered events | [`adapters/storage/sqlite.py`](adapters/storage/sqlite.py) |
