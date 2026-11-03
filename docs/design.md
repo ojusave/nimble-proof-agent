@@ -114,6 +114,6 @@ Uploaded files, parsed metadata, SQLite, events, and derived evidence persist lo
 
 Hosted mode is one password-protected shared workspace, not per-user tenancy. An eight-hour signed Secure/HttpOnly session and optional HTTP Basic protect pages and API routes. The configured external origin is authoritative; missing or weak hosted credentials fail closed. API bodies are bounded before proxying.
 
-The Docker image contains standalone Next.js and Python. The hosted launcher binds the UI to Render’s `PORT`, leaves Python on loopback, forwards shutdown signals, and exits if either child exits. `/api/health` checks the Python service and SQLite. `render.yaml` describes one paid service with a persistent disk; environment secrets are supplied separately.
+The Docker image contains standalone Next.js and Python. The hosted launcher binds the UI to the host-provided `PORT`, leaves Python on loopback, forwards shutdown signals, and exits if either child exits. `/api/health` checks the Python service and SQLite. Run one instance with persistent storage and supply environment secrets through the hosting service.
 
 Active searches become interrupted after a restart; the workflow is not checkpointed for automatic paid-task resumption. Automatic deploys remain off, and disk-backed deploys briefly interrupt the service. Multi-instance hosting would require an external database and work queue.
